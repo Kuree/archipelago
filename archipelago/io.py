@@ -22,6 +22,29 @@ def dump_packing_result(netlist, filename):
         f.write(str(blk_id) + ": " + str(blk_id) + "\n")
 
 
+def dump_placement_result(board_pos, filename, id_to_name=None):
+    # copied from cgra_pnr
+    if id_to_name is None:
+        id_to_name = {}
+        for blk_id in board_pos:
+            id_to_name[blk_id] = blk_id
+    blk_keys = list(board_pos.keys())
+    blk_keys.sort(key=lambda b: int(b[1:]))
+    with open(filename, "w+") as f:
+        header = "{0}\t\t\t{1}\t{2}\t\t#{3}\n".format("Block Name",
+                                                      "X",
+                                                      "Y",
+                                                      "Block ID")
+        f.write(header)
+        f.write("-" * len(header) + "\n")
+        for blk_id in blk_keys:
+            x, y = board_pos[blk_id]
+            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(id_to_name[blk_id],
+                                                       x,
+                                                       y,
+                                                       blk_id))
+
+
 def load_routing_result(filename):
     # copied from pnr python implementation
     with open(filename) as f:
