@@ -37,11 +37,10 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     # get the layout and routing file
     with open(arch_file) as f:
         layout_line = f.readline()
-        layout_filename = layout_line.split("=")[-1]
+        layout_filename = layout_line.split("=")[-1].strip()
         assert os.path.isfile(layout_filename)
         graph_path_line = f.readline()
-        graph_path = graph_path_line.split("=")[-1]
-        assert os.path.isfile(graph_path)
+        graph_path = graph_path_line.split("=")[-1].strip()
 
     # do the place and route
     placement_filename = os.path.join(cwd, app_name + ".place")
@@ -50,7 +49,7 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     route(packed_file, placement_filename, graph_path, route_filename)
 
     # need to load it back up
-    placement_result = pycyclone.load_placement(placement_filename)
+    placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
 
     # tear down
@@ -61,26 +60,18 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     return placement_result, routing_result
 
 
-def dump_packed_result(app_name, cwd, input_netlist):
-    assert input_netlist is not None
-    if isinstance(input_netlist, list):
-        netlist = {}
-        for idx, net in enumerate(input_netlist):
-            assert isinstance(net, list)
-            for entry in net:
-                assert len(entry) == 2, "entry in the net has to be " \
-                                        "(blk_id, port)"
-            netlist["e" + str(idx)] = net
-    else:
-        assert isinstance(input_netlist, dict)
-        netlist = {}
-        for net_id, net in input_netlist.items():
-            assert isinstance(net, list)
-            for entry in net:
-                assert len(entry) == 2, "entry in the net has to be " \
-                                        "(blk_id, port)"
-            netlist[net_id] = net
+def dump_packed_result(app_name, cwd, inputs):
+    assert inputs is not None
+    input_netlist, input_bus = inputs
+    assert isinstance(input_netlist, dict)
+    netlist = {}
+    for net_id, net in input_netlist.items():
+        assert isinstance(net, list)
+        for entry in net:
+            assert len(entry) == 2, "entry in the net has to be " \
+                                    "(blk_id, port)"
+        netlist[net_id] = net
     # dump the packed file
     packed_file = os.path.join(cwd, app_name + ".packed")
-    dump_packing_result(netlist, packed_file)
+    dump_packing_result(netlist, input_bus, packed_file)
     return packed_file

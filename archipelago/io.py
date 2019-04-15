@@ -1,4 +1,4 @@
-def dump_packing_result(netlist, filename):
+def dump_packing_result(netlist, bus, filename):
     def tuple_to_str(t_val):
         return "(" + ", ".join([str(val) for val in t_val]) + ")"
     # netlists
@@ -10,16 +10,27 @@ def dump_packing_result(netlist, filename):
             f.write("{}: ".format(net_id))
             f.write("\t".join([tuple_to_str(entry)
                                for entry in netlist[net_id]]))
+            f.write("\n")
+        f.write("\n")
 
-    f.write("ID to Names:\n")
-    ids = set()
-    for _, net in netlist.items():
-        for blk_id in net:
-            ids.add(blk_id)
-    ids = list(ids)
-    ids.sort(key=lambda x: int(x[1:]))
-    for blk_id in ids:
-        f.write(str(blk_id) + ": " + str(blk_id) + "\n")
+        f.write("ID to Names:\n")
+        ids = set()
+        for _, net in netlist.items():
+            for blk_id in net:
+                if isinstance(blk_id, (list, tuple)):
+                    blk_id = blk_id[0]
+                assert isinstance(blk_id, str)
+                ids.add(blk_id)
+        ids = list(ids)
+        ids.sort(key=lambda x: int(x[1:]))
+        for blk_id in ids:
+            f.write(str(blk_id) + ": " + str(blk_id) + "\n")
+
+        f.write("\n")
+        # registers that have been changed to PE
+        f.write("Netlist Bus:\n")
+        for net_id in bus:
+            f.write(str(net_id) + ": " + str(bus[net_id]) + "\n")
 
 
 def dump_placement_result(board_pos, filename, id_to_name=None):
