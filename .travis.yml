@@ -1,11 +1,22 @@
 language: python
+python:
+    - 3.6
 script:
-- echo "test"
+- python setup.py bdist_wheel
+
+after_success:
+    - echo [distutils]                                  > ~/.pypirc
+    - echo index-servers =                             >> ~/.pypirc
+    - echo "  pypi"                                    >> ~/.pypirc
+    - echo                                             >> ~/.pypirc
+    - echo [pypi]                                      >> ~/.pypirc
+    - echo repository=https://upload.pypi.org/legacy/  >> ~/.pypirc
+    - echo username=keyi                               >> ~/.pypirc
+    - echo password=$PYPI_PASSWORD                     >> ~/.pypirc
+    - echo "python setup.py sdist upload -r pypi"     > ~/deploy.sh
 deploy:
-  provider: pypi
-  user: keyi
-  password:
-    secure: wo5QnanZMBkbjxDAaU1JUgB4bKmlWGaapLxHd2lHGFPlTGeILIFm0+S9ojX0zPNzhpIvnhq5+VjoM7pt1HJAKz9y2TAv71+ohk3uowaFrMVyd6AGQ/1LZXtoCgt8WYc926tGkX4ufMps2/TJq/r7SkFBUh84J/JWnpokTmRxUnwv/tE4KxkHwVMkyWmBQWatuNelGdOSnE3zk5fGLswUjNr7KA+G6t2xKS9OnYZMw+EVOz6SuYrMKrCEXce3ofgAdcXoS7hXzmknN8lCle8L9DwgCwdebvs0srei+1lv+Qa0MNMbBeJ4FB64znKI6Z9qYrOm7X+94ZIYo0Izf0+7ivP8hxYgF0qAko47WpowHayS+6X3nDUV2DCanzQV+0IbQFZVUD2ic47DK8jjiWhrynpo/7wyhLvIZjHR2j2HVhFsXbpW8vD42kupHtIvpQLZAXJR75iRUrhHV6hclxo1GnzXK1si1KLLbgEOq1Jc+DITYIyQRTO2KFHjdWv+FVr3d5WtMergIhZP7IT8tBVhEkSA5SqeRRbKNE61C5Lkfn4jiNwr0HlmbtQAjDkQhs+X7bVaNyPoG3M9n3LDN+7cmglX4jJqAHXfSI0tHCiEjJ9VZGx7W2Ala4uHHsITNRYO809kuLDBZnAfRJQc2TwWMaVI5gDI4rTxLfl077iBBkk=
+  provider: script
+  script: /bin/sh ~/deploy.sh
   on:
     tags: true
     branch: master
