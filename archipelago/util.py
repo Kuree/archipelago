@@ -30,3 +30,19 @@ def get_layout(board_layout, pe_tag="p", memory_tag="m"):
     # memory is a DSP-type, so lower priority
     layout.set_priority_major(memory_tag, default_priority - 1)
     return layout
+
+
+def parse_routing_result(raw_routing_result, interconnect):
+    # in the original cyclone implementation we don't need this
+    # since it just translate this IR into bsb format without verifying the
+    # connectivity. here, however, we need to since we're producing bitstream
+    result = {}
+    for net_id, raw_routes in raw_routing_result.items():
+        result[net_id] = []
+        for raw_segment in raw_routes:
+            segment = []
+            for node_str in raw_segment:
+                node = interconnect.parse_node(node_str)
+                segment.append(node)
+            result[net_id].append(segment)
+    return result

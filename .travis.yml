@@ -1,0 +1,10 @@
+language: python
+
+deploy:
+  provider: pypi
+  user: keyi
+  password:
+    secure: CNPPg558+lDtChAg+QF939wu+l4MLfCfYMZjgm9r/dlsdu72/wlyDMjGB62Q56rnkTHgtRyFfzfkjPgzFbdT5q8OM0EKqkh0qVYfxPyI9KxPvDX3M1eBoj3pZP5H9i4x5mtyZbdkF99qlUHopO0bDsmmC/A3L+5T6WjyKwIoBwo8r3UPWiN5wWNy43I3VIYOMkJPHkNFwcCWINY6MSSNRqokZwXlG0bO6XC3s1gjalkF6ep7Y3n8NnByiZ+1gX7vVACNfdAgdzKDM83/AmnGLr6RqhhcnNadWAcu9NJBx2zDL7Wq5nYDrMKSpylvSezwKA8rPRgSkNfKEXMeApw/kFfG0sCdR5YtCiPglKEN14w5OPcCmviZQ8CUIgnkfRX3d6cFqCA9ITFpZplihXk/ozpNcn4ObCa6FFA2BqsKFt9uPZQZluXI0m8mtx+6ge1ExP+TKBO2prwMutfFOWrr5YfpXh1+ycm1OAb0SlynXQo/ouUyAb7aFlcUPMTsSbjshf4ll3dlvLaOineKnotJ3d9E3ShRsdzyZuscBcnROkBo5Z+gEH2fDK1ORPvm3c7gad62cmnQrYqe6o5hmVaeI77ihzJ94M37VpOQBT+Wk4oEE0uRLJL4M8GQEJQUMz9QrbxorhaaQfBN63VMufTj1gMdbgoBsJ5dd24q8+wsuo8=
+ on:
+     tags: true
+     branch: master

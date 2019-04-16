@@ -2,6 +2,7 @@ import tempfile
 import os
 import shutil
 from .io import dump_packing_result, load_routing_result, dump_placement_result
+from .util import parse_routing_result
 from .place import place
 from .route import route
 import pycyclone
@@ -56,6 +57,9 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     if use_temp:
         if os.path.isdir(cwd):
             shutil.rmtree(cwd)
+
+    if hasattr(arch, "dump_pnr"):
+        routing_result = parse_routing_result(routing_result, arch)
 
     return placement_result, routing_result
 
