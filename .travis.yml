@@ -14,10 +14,10 @@ after_success:
     - echo repository=https://upload.pypi.org/legacy/  >> ~/.pypirc
     - echo username=keyi                               >> ~/.pypirc
     - echo password=$PYPI_PASSWORD                     >> ~/.pypirc
-    - echo "twine upload dist/*"                        > deploy.sh
+
 deploy:
   provider: script
-  script: /bin/sh deploy.sh
+  script: /bin/sh .deploy.sh
   on:
     tags: true
     branch: master

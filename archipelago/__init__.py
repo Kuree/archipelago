@@ -18,7 +18,10 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     if len(cwd) == 0:
         # get a temp cwd
         use_temp = True
-        cwd = tempfile.TemporaryDirectory()
+        cwd_dir = tempfile.TemporaryDirectory()
+        cwd = cwd_dir.name
+    else:
+        cwd_dir = None
 
     if not isinstance(arch, str):
         # attempt to treat it as an interconnect object
@@ -56,7 +59,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     # tear down
     if use_temp:
         if os.path.isdir(cwd):
-            shutil.rmtree(cwd)
+            assert cwd_dir is not None
+            cwd_dir.__exit__()
 
     if hasattr(arch, "dump_pnr"):
         routing_result = parse_routing_result(routing_result, arch)
