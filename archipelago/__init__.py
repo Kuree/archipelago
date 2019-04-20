@@ -60,7 +60,7 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     if use_temp:
         if os.path.isdir(cwd):
             assert cwd_dir is not None
-            cwd_dir.__exit__()
+            cwd_dir.__exit__(None, None, None)
 
     if hasattr(arch, "dump_pnr"):
         routing_result = parse_routing_result(routing_result, arch)
