@@ -8,7 +8,8 @@ from .route import route
 import pycyclone
 
 
-def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
+def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
+        id_to_name=None, fixed_pos=None):
     if input_netlist is None and len(packed_file):
         raise ValueError("both input")
 
@@ -36,7 +37,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
 
     # prepare for the netlist
     if len(packed_file) == 0:
-        packed_file = dump_packed_result(app_name, cwd, input_netlist)
+        packed_file = dump_packed_result(app_name, cwd, input_netlist,
+                                         id_to_name)
 
     # get the layout and routing file
     with open(arch_file) as f:
@@ -46,9 +48,19 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
         graph_path_line = f.readline()
         graph_path = graph_path_line.split("=")[-1].strip()
 
-    # do the place and route
+    # get placement name
     placement_filename = os.path.join(cwd, app_name + ".place")
-    place(packed_file, layout_filename, placement_filename)
+
+    # if we have fixed
+    if fixed_pos is not None:
+        assert isinstance(fixed_pos, dict)
+        dump_placement_result(fixed_pos, placement_filename, id_to_name)
+        has_fixed = True
+    else:
+        has_fixed = False
+
+    # do the place and route
+    place(packed_file, layout_filename, placement_filename, has_fixed)
     route_filename = os.path.join(cwd, app_name + ".route")
     route(packed_file, placement_filename, graph_path, route_filename)
 
@@ -68,8 +80,10 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name=""):
     return placement_result, routing_result
 
 
-def dump_packed_result(app_name, cwd, inputs):
+def dump_packed_result(app_name, cwd, inputs, id_to_name):
     assert inputs is not None
+    if id_to_name is None:
+        id_to_name = {}
     input_netlist, input_bus = inputs
     assert isinstance(input_netlist, dict)
     netlist = {}
@@ -81,5 +95,5 @@ def dump_packed_result(app_name, cwd, inputs):
         netlist[net_id] = net
     # dump the packed file
     packed_file = os.path.join(cwd, app_name + ".packed")
-    dump_packing_result(netlist, input_bus, packed_file)
+    dump_packing_result(netlist, input_bus, packed_file, id_to_name)
     return packed_file

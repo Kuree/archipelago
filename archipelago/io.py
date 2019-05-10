@@ -1,4 +1,4 @@
-def dump_packing_result(netlist, bus, filename):
+def dump_packing_result(netlist, bus, filename, id_to_name):
     def tuple_to_str(t_val):
         return "(" + ", ".join([str(val) for val in t_val]) + ")"
     # netlists
@@ -24,7 +24,9 @@ def dump_packing_result(netlist, bus, filename):
         ids = list(ids)
         ids.sort(key=lambda x: int(x[1:]))
         for blk_id in ids:
-            f.write(str(blk_id) + ": " + str(blk_id) + "\n")
+            blk_name = str(id_to_name[blk_id]) if blk_id in id_to_name \
+                else str(blk_id)
+            f.write(str(blk_id) + ": " + blk_name + "\n")
 
         f.write("\n")
         # registers that have been changed to PE
