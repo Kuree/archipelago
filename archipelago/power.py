@@ -2,7 +2,7 @@ from canal.interconnect import Interconnect
 
 
 def __get_net_id(id_num):
-    return "f".format(id_num)
+    return "f{0}".format(id_num)
 
 
 def reduce_switching(routing_result, interconnect: Interconnect):
