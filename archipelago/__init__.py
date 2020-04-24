@@ -5,11 +5,12 @@ from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result
 from .place import place
 from .route import route
+from .power import reduce_switching as reduce_switch_power
 import pycyclone
 
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
-        id_to_name=None, fixed_pos=None):
+        id_to_name=None, fixed_pos=None, reduce_switching=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("both input")
 
@@ -76,6 +77,9 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
 
     if hasattr(arch, "dump_pnr"):
         routing_result = parse_routing_result(routing_result, arch)
+        if reduce_switching:
+            additional_route = reduce_switch_power(routing_result, arch)
+            routing_result.update(additional_route)
 
     return placement_result, routing_result
 
