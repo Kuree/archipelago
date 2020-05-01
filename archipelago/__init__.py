@@ -6,6 +6,7 @@ from .util import parse_routing_result
 from .place import place
 from .route import route
 from .power import reduce_switching as reduce_switch_power
+from .power import turn_off_tiles
 import pycyclone
 
 
