@@ -83,7 +83,7 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         tile_info = None
         if power_domain:
             bitstream, tile_info = turn_off_tiles(routing_result, arch)
-            additional_route = fix_x(routing_result, arch, tile_info[1])
+            additional_route = fix_x(routing_result, arch, tile_info)
             routing_result.update(additional_route)
         if reduce_switching:
             additional_route = reduce_switch_power(routing_result, arch, tile_info[1])
