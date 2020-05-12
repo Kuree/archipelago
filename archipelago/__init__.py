@@ -6,12 +6,13 @@ from .util import parse_routing_result
 from .place import place
 from .route import route
 from .power import reduce_switching as reduce_switch_power
-from .power import turn_off_tiles
+from .power import turn_off_tiles, fix_x
 import pycyclone
 
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
-        id_to_name=None, fixed_pos=None, reduce_switching=False):
+        id_to_name=None, fixed_pos=None, reduce_switching=False,
+        power_domain=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("both input")
 
@@ -76,13 +77,22 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
             assert cwd_dir is not None
             cwd_dir.__exit__(None, None, None)
 
+    bitstream = []
     if hasattr(arch, "dump_pnr"):
         routing_result = parse_routing_result(routing_result, arch)
+        tile_info = None
+        if power_domain:
+            bitstream, tile_info = turn_off_tiles(routing_result, arch)
+            additional_route = fix_x(routing_result, arch, tile_info[1])
+            routing_result.update(additional_route)
         if reduce_switching:
-            additional_route = reduce_switch_power(routing_result, arch)
+            additional_route = reduce_switch_power(routing_result, arch, tile_info[1])
             routing_result.update(additional_route)
 
-    return placement_result, routing_result
+    if power_domain:
+        return placement_result, routing_result, bitstream
+    else:
+        return placement_result, routing_result
 
 
 def dump_packed_result(app_name, cwd, inputs, id_to_name):
