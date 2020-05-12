@@ -1,9 +1,14 @@
+import sys
+
+
 def __get_net_id(id_num):
     return "f{0}".format(id_num)
 
 
-def reduce_switching(routing_result, interconnect):
+def reduce_switching(routing_result, interconnect, ignore_tiles=None):
     import canal
+    if ignore_tiles is None:
+        ignore_tiles = {}
     result = {}
     # flat used nodes
     used_nodes = set()
@@ -15,6 +20,9 @@ def reduce_switching(routing_result, interconnect):
     # loop through each sb node
     for tile_circuit in interconnect.tile_circuits.values():
         for tile in tile_circuit.tiles.values():
+            x, y = tile.x, tile.y
+            if (x, y) in ignore_tiles:
+                continue
             switch_box = tile.switchbox
             num_tracks = switch_box.num_track
             for side in canal.interconnect.SwitchBoxSide:
@@ -36,7 +44,8 @@ def reduce_switching(routing_result, interconnect):
                             result[net_id] = [[node, sb]]
                             has_fix = True
                             break
-                    assert has_fix, "Unable to find a switching fix"
+                    if not has_fix:
+                        print("Unable to find a switching fix for", sb, file=sys.stderr)
     print("Using extra", len(result), "connections to fix the routing")
     return result
 
