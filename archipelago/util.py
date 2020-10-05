@@ -56,22 +56,29 @@ def get_max_num_col(netlist, interconnect):
         resources[x] = {}
         for y in range(interconnect.y_max + 1):
             tile_circuit = interconnect.tile_circuits[(x, y)]
-            pnr_tag = tile_circuit.core.pnr_info()
-            tag = pnr_tag.tag_name
-            if tag not in resources[x]:
-                resources[x][tag] = 0
-            resources[x][tag] += 1
+            pnr_tags = tile_circuit.core.pnr_info()
+            if not isinstance(pnr_tags, list):
+                pnr_tags = [pnr_tags]
+            for pnr_tag in pnr_tags:
+                tag = pnr_tag.tag_name
+                if tag not in resources[x]:
+                    resources[x][tag] = 0
+                resources[x][tag] += 1
     # compute the block resource
     required_blks = {}
+    blk_ids = set()
     for net in netlist.values():
         for blk, _ in net:
-            blk_type = blk[0]
-            if blk_type == 'r':
-                # we always have a lot of registers on the fabric
-                continue
-            if blk_type not in required_blks:
-                required_blks[blk_type] = 0
-            required_blks[blk_type] += 1
+            blk_ids.add(blk)
+
+    for blk in blk_ids:
+        blk_type = blk[0]
+        if blk_type == 'r':
+            # we always have a lot of registers on the fabric
+            continue
+        if blk_type not in required_blks:
+            required_blks[blk_type] = 0
+        required_blks[blk_type] += 1
 
     # figure out how many columns required
     # notice that we do that with groups of special tiles,
@@ -91,11 +98,16 @@ def get_max_num_col(netlist, interconnect):
                 tags.append(tag)
             else:
                 group_size = x + 1
+                break
     assert group_size != 0, "Unable to find group size"
+    print("group size", group_size)
+    print("required_blks", required_blks)
+    print("resources", resources)
 
     current_col = -1
     for x in range(interconnect.x_max + 1):
         should_continue = False
+        print("status", x, required_blks)
         for num in required_blks.values():
             if num > 0:
                 should_continue = True
@@ -112,4 +124,5 @@ def get_max_num_col(netlist, interconnect):
     # compute the group number required
     import math
     max_num_col = int(math.ceil(current_col / group_size)) * group_size
+    print("MAX COLUMN IS", max_num_col, "CURRENT_COL", current_col)
     return max_num_col

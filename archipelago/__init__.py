@@ -32,8 +32,11 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         if hasattr(arch, "dump_pnr"):
             # if virtualization is turned on with canal, we can dynamically
             # dump the adjusted size and partition
-            # TODO: add partition binary support
-            max_num_col = get_max_num_col(input_netlist, arch)
+            # we assume the netlist is already partitioned
+            if virtualized:
+                max_num_col = get_max_num_col(input_netlist[0], arch)
+            else:
+                max_num_col = None
             arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
             arch_file = os.path.join(cwd, "design.info")
         else:
