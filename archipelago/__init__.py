@@ -2,7 +2,7 @@ import tempfile
 import os
 import shutil
 from .io import dump_packing_result, load_routing_result, dump_placement_result
-from .util import parse_routing_result
+from .util import parse_routing_result, get_max_num_col
 from .place import place
 from .route import route
 from .power import reduce_switching as reduce_switch_power
@@ -12,7 +12,7 @@ import pycyclone
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         id_to_name=None, fixed_pos=None, reduce_switching=False,
-        power_domain=False):
+        power_domain=False, virtualized=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("both input")
 
@@ -30,8 +30,11 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
     if not isinstance(arch, str):
         # attempt to treat it as an interconnect object
         if hasattr(arch, "dump_pnr"):
-            # use dump pnr instead
-            arch.dump_pnr(cwd, "design")
+            # if virtualization is turned on with canal, we can dynamically
+            # dump the adjusted size and partition
+            # TODO: add partition binary support
+            max_num_col = get_max_num_col(input_netlist, arch)
+            arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
             arch_file = os.path.join(cwd, "design.info")
         else:
             raise Exception("arch has to be either string or interconnect")

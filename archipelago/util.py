@@ -46,3 +46,70 @@ def parse_routing_result(raw_routing_result, interconnect):
                 segment.append(node)
             result[net_id].append(segment)
     return result
+
+
+def get_max_num_col(netlist, interconnect):
+    # first we need to build a map of each resources
+    # we assume registers are abundant
+    resources = {}
+    for x in range(interconnect.x_max + 1):
+        resources[x] = {}
+        for y in range(interconnect.y_max + 1):
+            tile_circuit = interconnect.tile_circuits[(x, y)]
+            pnr_tag = tile_circuit.core.pnr_info()
+            tag = pnr_tag.tag_name
+            if tag not in resources[x]:
+                resources[x][tag] = 0
+            resources[x][tag] += 1
+    # compute the block resource
+    required_blks = {}
+    for net in netlist.values():
+        for blk, _ in net:
+            blk_type = blk[0]
+            if blk_type == 'r':
+                # we always have a lot of registers on the fabric
+                continue
+            if blk_type not in required_blks:
+                required_blks[blk_type] = 0
+            required_blks[blk_type] += 1
+
+    # figure out how many columns required
+    # notice that we do that with groups of special tiles,
+    # most cases, mem tile. we need to figure out the groups
+    # automatically as well
+    group_size = 0
+    # assume it starts from 0
+    tags = []
+    group_size = 0
+    for x in range(interconnect.x_max + 1):
+        tile_circuit = interconnect.tile_circuits[(x, interconnect.y_max // 2)]
+        tag = tile_circuit.core.pnr_info().tag_name
+        if not tags:
+            tags.append(tag)
+        else:
+            if tag in tags:
+                tags.append(tag)
+            else:
+                group_size = x + 1
+    assert group_size != 0, "Unable to find group size"
+
+    current_col = -1
+    for x in range(interconnect.x_max + 1):
+        should_continue = False
+        for num in required_blks.values():
+            if num > 0:
+                should_continue = True
+                break
+        if not should_continue:
+            break
+        current_col += 1
+
+        blks = resources[current_col]
+        for blk_type, value in blks.items():
+            if blk_type in required_blks:
+                required_blks[blk_type] -= value
+
+    # compute the group number required
+    import math
+    max_num_col = int(math.ceil(current_col / group_size)) * group_size
+    return max_num_col
