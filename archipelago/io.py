@@ -1,3 +1,6 @@
+import os
+
+
 def dump_packing_result(netlist, bus, filename, id_to_name):
     def tuple_to_str(t_val):
         return "(" + ", ".join([str(val) for val in t_val]) + ")"

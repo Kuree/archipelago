@@ -68,7 +68,7 @@ def get_group_size(interconnect):
     return group_size
 
 
-def get_total_clb(interconnect, group_size):
+def get_total_clb_per_group(interconnect, group_size):
     # search for where the clb actually starts
     # we use the middle horizontal line first
     default_priority = 20
@@ -86,19 +86,25 @@ def get_total_clb(interconnect, group_size):
     num_clb_per_col = 0
     for y in range(interconnect.y_max + 1):
         tile_circuit = interconnect.tile_circuits[(x_start, y)]
-        tag = tile_circuit.core.pnr_info()
-        if tag.priority_major == default_priority and \
-                tag.priority_minor == default_priority:
-            num_clb_per_col += 1
+        tags = tile_circuit.core.pnr_info()
+        if not isinstance(tags, list):
+            tags = [tags]
+        for tag in tags:
+            if tag.priority_major == default_priority and \
+                    tag.priority_minor == default_priority:
+                num_clb_per_col += 1
+                break
     # now need to figure out how many cols in the group
     num_clb_col = 0
     for x in range(x_start, x_start + group_size):
         tile_circuit = interconnect.tile_circuits[(x, middle_y)]
         tag = tile_circuit.core.pnr_info()
         if tag.priority_major != default_priority or \
-                tag.priority_minor == default_priority:
+                tag.priority_minor != default_priority:
             break
         num_clb_col += 1
+    assert num_clb_col > 1
+    assert num_clb_per_col > 1
     return num_clb_col * num_clb_per_col
 
 
@@ -142,7 +148,6 @@ def get_max_num_col(netlist, interconnect):
     current_col = -1
     for x in range(interconnect.x_max + 1):
         should_continue = False
-        print("status", x, required_blks)
         for num in required_blks.values():
             if num > 0:
                 should_continue = True
