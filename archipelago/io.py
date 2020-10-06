@@ -89,3 +89,29 @@ def load_routing_result(filename):
                     segment.append(tokens)
                 routes[net_id].append(segment)
     return routes
+
+
+def load_packing_result(filename):
+    import pythunder
+    netlist, bus_mode = pythunder.io.load_netlist(filename)
+    id_to_name = pythunder.io.load_id_to_name(filename)
+    return (netlist, bus_mode), id_to_name
+
+
+def dump_packed_result(app_name, cwd, inputs, id_to_name):
+    assert inputs is not None
+    if id_to_name is None:
+        id_to_name = {}
+    input_netlist, input_bus = inputs
+    assert isinstance(input_netlist, dict)
+    netlist = {}
+    for net_id, net in input_netlist.items():
+        assert isinstance(net, list)
+        for entry in net:
+            assert len(entry) == 2, "entry in the net has to be " \
+                                    "(blk_id, port)"
+        netlist[net_id] = net
+    # dump the packed file
+    packed_file = os.path.join(cwd, app_name + ".packed")
+    dump_packing_result(netlist, input_bus, packed_file, id_to_name)
+    return packed_file

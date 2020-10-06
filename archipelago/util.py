@@ -48,6 +48,60 @@ def parse_routing_result(raw_routing_result, interconnect):
     return result
 
 
+def get_group_size(interconnect):
+    group_size = 0
+    # assume it starts from 0
+    tags = []
+    group_size = 0
+    for x in range(interconnect.x_max + 1):
+        tile_circuit = interconnect.tile_circuits[(x, interconnect.y_max // 2)]
+        tag = tile_circuit.core.pnr_info().tag_name
+        if not tags:
+            tags.append(tag)
+        else:
+            if tag in tags:
+                tags.append(tag)
+            else:
+                group_size = x + 1
+                break
+    assert group_size != 0, "Unable to find group size"
+    return group_size
+
+
+def get_total_clb(interconnect, group_size):
+    # search for where the clb actually starts
+    # we use the middle horizontal line first
+    default_priority = 20
+    middle_y = (interconnect.y_max + 1) // 2
+    x_start = 0
+    for x in range(interconnect.x_max + 1):
+        tile_circuit = interconnect.tile_circuits[(x, middle_y)]
+        tag = tile_circuit.core.pnr_info()
+        if tag.priority_major == default_priority and \
+                tag.priority_minor == default_priority:
+            break
+        x_start += 1
+    # counting start and end of y
+    # we assume the CLBs are placed homogeneously across the column
+    num_clb_per_col = 0
+    for y in range(interconnect.y_max + 1):
+        tile_circuit = interconnect.tile_circuits[(x_start, y)]
+        tag = tile_circuit.core.pnr_info()
+        if tag.priority_major == default_priority and \
+                tag.priority_minor == default_priority:
+            num_clb_per_col += 1
+    # now need to figure out how many cols in the group
+    num_clb_col = 0
+    for x in range(x_start, x_start + group_size):
+        tile_circuit = interconnect.tile_circuits[(x, middle_y)]
+        tag = tile_circuit.core.pnr_info()
+        if tag.priority_major != default_priority or \
+                tag.priority_minor == default_priority:
+            break
+        num_clb_col += 1
+    return num_clb_col * num_clb_per_col
+
+
 def get_max_num_col(netlist, interconnect):
     # first we need to build a map of each resources
     # we assume registers are abundant
@@ -84,26 +138,7 @@ def get_max_num_col(netlist, interconnect):
     # notice that we do that with groups of special tiles,
     # most cases, mem tile. we need to figure out the groups
     # automatically as well
-    group_size = 0
-    # assume it starts from 0
-    tags = []
-    group_size = 0
-    for x in range(interconnect.x_max + 1):
-        tile_circuit = interconnect.tile_circuits[(x, interconnect.y_max // 2)]
-        tag = tile_circuit.core.pnr_info().tag_name
-        if not tags:
-            tags.append(tag)
-        else:
-            if tag in tags:
-                tags.append(tag)
-            else:
-                group_size = x + 1
-                break
-    assert group_size != 0, "Unable to find group size"
-    print("group size", group_size)
-    print("required_blks", required_blks)
-    print("resources", resources)
-
+    group_size = get_group_size(interconnect)
     current_col = -1
     for x in range(interconnect.x_max + 1):
         should_continue = False
