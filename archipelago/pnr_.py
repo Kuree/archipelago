@@ -98,6 +98,8 @@ def __compact_pnr(arch, input_netlist, **kargs):
         # no constraints on fixed pos since PnR is free to figure it out
         # within the boundary
         kargs.pop("fixed_pos")
+    kargs.pop("arch")
+    kargs.pop("input_netlist")
     for col in range(start_size, arch.x_max + 1, group_size):
         try:
             pnr(arch, input_netlist, **kargs)
