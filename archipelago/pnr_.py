@@ -1,5 +1,4 @@
 import tempfile
-import inspect
 import os
 from .io import dump_packed_result
 from .place import place
@@ -10,11 +9,17 @@ from .util import parse_routing_result, get_max_num_col, get_group_size
 import pycyclone
 
 
+class PnRException(Exception):
+    def __init__(self):
+        super(PnRException, self).__init__("Unable to PnR. Sorry! Please check the log")
+
+
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         id_to_name=None, fixed_pos=None, max_num_col=None, compact=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
+    kargs = locals()
     use_temp = False
     app_name = "design" if len(app_name) == 0 else app_name
 
@@ -35,9 +40,10 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
             # if compact is enabled, we need to compute the max_num_col
             # and re-turn the function until we can have it
             if compact:
-                frame = inspect.currentframe()
-                _, _, _, kargs = inspect.getargvalues(frame)
                 kargs["compact"] = False
+                # let PnR to figure IO locations
+                for n in {"arch", "input_netlist", "fixed_pos"}:
+                    kargs.pop(n)
                 return __compact_pnr(arch, input_netlist, **kargs)
             arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
             arch_file = os.path.join(cwd, "design.info")
@@ -79,6 +85,10 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
 
+    # making sure the routing result is there
+    if not os.path.isfile(routing_result):
+        raise PnRException()
+
     # tear down
     if use_temp:
         if os.path.isdir(cwd):
@@ -93,16 +103,12 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
 
 def __compact_pnr(arch, input_netlist, **kargs):
     group_size = get_group_size(arch)
-    start_size = get_max_num_col(input_netlist, arch)
-    if "fixed_pos" in kargs:
-        # no constraints on fixed pos since PnR is free to figure it out
-        # within the boundary
-        kargs.pop("fixed_pos")
-    kargs.pop("arch")
-    kargs.pop("input_netlist")
+    start_size = get_max_num_col(input_netlist[0], arch)
     for col in range(start_size, arch.x_max + 1, group_size):
         try:
-            pnr(arch, input_netlist, **kargs)
-        except Exception:   # noqa
+            # force it to use the desired column
+            kargs["max_num_col"] = col
+            return pnr(arch, input_netlist, **kargs)
+        except PnRException:
             pass
-    raise Exception("Unable to to PnR")
+    raise PnRException()
