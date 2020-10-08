@@ -1,16 +1,17 @@
 import tempfile
+import inspect
 import os
 from .io import dump_packed_result
 from .place import place
 from .route import route
 from .io import dump_packing_result, load_routing_result, dump_placement_result
-from .util import parse_routing_result
+from .util import parse_routing_result, get_max_num_col, get_group_size
 
 import pycyclone
 
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
-        id_to_name=None, fixed_pos=None, max_num_col=None):
+        id_to_name=None, fixed_pos=None, max_num_col=None, compact=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
@@ -31,6 +32,13 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
             # if virtualization is turned on with canal, we can dynamically
             # dump the adjusted size and partition
             # we assume the netlist is already partitioned
+            # if compact is enabled, we need to compute the max_num_col
+            # and re-turn the function until we can have it
+            if compact:
+                frame = inspect.currentframe()
+                _, _, _, kargs = inspect.getargvalues(frame)
+                kargs["compact"] = False
+                return __compact_pnr(arch, input_netlist, **kargs)
             arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
             arch_file = os.path.join(cwd, "design.info")
         else:
@@ -81,3 +89,18 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         routing_result = parse_routing_result(routing_result, arch)
 
     return placement_result, routing_result
+
+
+def __compact_pnr(arch, input_netlist, **kargs):
+    group_size = get_group_size(arch)
+    start_size = get_max_num_col(input_netlist, arch)
+    if "fixed_pos" in kargs:
+        # no constraints on fixed pos since PnR is free to figure it out
+        # within the boundary
+        kargs.pop("fixed_pos")
+    for col in range(start_size, arch.x_max + 1, group_size):
+        try:
+            pnr(arch, input_netlist, **kargs)
+        except Exception:   # noqa
+            pass
+    raise Exception("Unable to to PnR")
