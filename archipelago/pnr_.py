@@ -78,16 +78,19 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
 
     # do the place and route
     place(packed_file, layout_filename, placement_filename, has_fixed)
+    # making sure the placement result is there
+    if not os.path.isfile(placement_filename):
+        raise PnRException()
+
     route_filename = os.path.join(cwd, app_name + ".route")
     route(packed_file, placement_filename, graph_path, route_filename)
+    # making sure the routing result is there
+    if not os.path.isfile(route_filename):
+        raise PnRException()
 
     # need to load it back up
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
-
-    # making sure the routing result is there
-    if not os.path.isfile(routing_result):
-        raise PnRException()
 
     # tear down
     if use_temp:
