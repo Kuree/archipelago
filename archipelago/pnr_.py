@@ -41,8 +41,7 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
             # and re-turn the function until we can have it
             if compact:
                 kargs["compact"] = False
-                # let PnR to figure IO locations
-                for n in {"arch", "input_netlist", "fixed_pos"}:
+                for n in {"arch", "input_netlist"}:
                     kargs.pop(n)
                 return __compact_pnr(arch, input_netlist, **kargs)
             arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
