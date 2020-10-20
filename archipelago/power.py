@@ -5,7 +5,7 @@ def __get_net_id(id_num, prefix="f"):
     return "{1}{0}".format(id_num, prefix)
 
 
-def reduce_switching(routing_result, interconnect, ignore_tiles=None):
+def reduce_switching(routing_result, interconnect, ignore_tiles=None, compact=False):
     import canal
     if ignore_tiles is None:
         ignore_tiles = {}
@@ -17,11 +17,22 @@ def reduce_switching(routing_result, interconnect, ignore_tiles=None):
             for node in seg:
                 used_nodes.add(node)
 
+    # if compact mode is on, never go beyond the max x
+    if compact:
+        max_x = 0
+        for node in used_nodes:
+            if node.x > max_x:
+                max_x = node.x
+    else:
+        max_x = 0xFFFFFFFF
+
     # loop through each sb node
     for tile_circuit in interconnect.tile_circuits.values():
         for tile in tile_circuit.tiles.values():
             x, y = tile.x, tile.y
             if (x, y) in ignore_tiles:
+                continue
+            if x > max_x:
                 continue
             switch_box = tile.switchbox
             num_tracks = switch_box.num_track
