@@ -106,7 +106,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
 def __compact_pnr(arch, input_netlist, **kargs):
     group_size = get_group_size(arch)
     start_size = get_max_num_col(input_netlist[0], arch)
-    for col in range(start_size, arch.x_max + 1, group_size):
+    # notice that python range is exclusive
+    for col in range(start_size, arch.x_max + 1 + 1, group_size):
         try:
             # force it to use the desired column
             kargs["max_num_col"] = col
