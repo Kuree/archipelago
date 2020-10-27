@@ -1,5 +1,6 @@
 import tempfile
 import os
+import shutil
 from .io import dump_packed_result
 from .place import place
 from .route import route
@@ -15,7 +16,8 @@ class PnRException(Exception):
 
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
-        id_to_name=None, fixed_pos=None, max_num_col=None, compact=False):
+        id_to_name=None, fixed_pos=None, max_num_col=None, compact=False,
+        copy_to_dir=None):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
@@ -54,7 +56,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
     # prepare for the netlist
     if len(packed_file) == 0:
         packed_file = dump_packed_result(app_name, cwd, input_netlist,
-                                         id_to_name)
+                                         id_to_name,
+                                         copy_to_dir=copy_to_dir)
 
     # get the layout and routing file
     with open(arch_file) as f:
@@ -99,6 +102,11 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
 
     if hasattr(arch, "dump_pnr"):
         routing_result = parse_routing_result(routing_result, arch)
+
+    # copy files over
+    if copy_to_dir is not None:
+        shutil.copy2(placement_filename, copy_to_dir)
+        shutil.copy2(route_filename, copy_to_dir)
 
     return placement_result, routing_result
 

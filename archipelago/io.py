@@ -1,4 +1,5 @@
 import os
+import shutil
 
 
 def dump_packing_result(netlist, bus, filename, id_to_name):
@@ -101,7 +102,7 @@ def load_packing_result(filename):
     return (netlist, bus_mode), id_to_name
 
 
-def dump_packed_result(app_name, cwd, inputs, id_to_name):
+def dump_packed_result(app_name, cwd, inputs, id_to_name, copy_to_dir=None):
     assert inputs is not None
     if id_to_name is None:
         id_to_name = {}
@@ -117,4 +118,9 @@ def dump_packed_result(app_name, cwd, inputs, id_to_name):
     # dump the packed file
     packed_file = os.path.join(cwd, app_name + ".packed")
     dump_packing_result(netlist, input_bus, packed_file, id_to_name)
+
+    # copy file over
+    if copy_to_dir is not None:
+        shutil.copy2(packed_file, copy_to_dir)
+
     return packed_file
