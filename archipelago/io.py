@@ -127,9 +127,11 @@ def dump_packed_result(app_name, cwd, inputs, id_to_name, copy_to_dir=None):
 
 
 def dump_meta_file(halide_src, app_name, cwd):
-    halide_name = os.path.splitext(os.path.basename(halide_src))[0]
+    bn = os.path.basename
+    dn = os.path.dirname
+    halide_name = bn(dn(dn(halide_src)))
     with open(os.path.join(cwd, "{0}.meta".format(app_name)), "w+") as f:
         f.write("placement={0}.place\n".format(app_name))
         f.write("bitstream={0}.bs\n".format(halide_name))
         f.write("input=input.raw\n")
-        f.write("output=output.raw\n")
+        f.write("output=gold.raw\n")
