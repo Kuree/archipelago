@@ -132,7 +132,8 @@ def fix_x(routing_result, interconnect, on_off_tiles):
 
         # for any switch box output, if not used, connect it to the core output
         sbs = tile_circuit.sbs
-        for switch_box in sbs.values():
+        for sb_circuit in sbs.values():
+            switch_box = sb_circuit.switchbox
             num_tracks = switch_box.num_track
             for side in canal.interconnect.SwitchBoxSide:
                 for t in range(num_tracks):
