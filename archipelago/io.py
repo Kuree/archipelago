@@ -133,5 +133,13 @@ def dump_meta_file(halide_src, app_name, cwd):
     with open(os.path.join(cwd, "{0}.meta".format(app_name)), "w+") as f:
         f.write("placement={0}.place\n".format(app_name))
         f.write("bitstream={0}.bs\n".format(halide_name))
-        f.write("input=input.raw\n")
-        f.write("output=gold.raw\n")
+        if os.path.exists(os.path.join(cwd, 'bin/input.raw')):
+            ext = '.raw'
+        else:
+            ext = '.pgm'
+        f.write(f"input=input{ext}\n")
+        if os.path.exists(os.path.join(cwd, 'bin/gold.raw')):
+            ext = '.raw'
+        else:
+            ext = '.pgm'
+        f.write("output=gold{ext}\n")
