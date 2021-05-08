@@ -142,4 +142,4 @@ def dump_meta_file(halide_src, app_name, cwd):
             ext = '.raw'
         else:
             ext = '.pgm'
-        f.write("output=gold{ext}\n")
+        f.write(f"output=gold{ext}\n")
