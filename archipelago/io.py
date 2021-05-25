@@ -1,5 +1,6 @@
 import os
 import shutil
+import json
 
 
 def dump_packing_result(netlist, bus, filename, id_to_name):
@@ -126,20 +127,46 @@ def dump_packed_result(app_name, cwd, inputs, id_to_name, copy_to_dir=None):
     return packed_file
 
 
+def __generate_entry(entry):
+    result = ""
+    num_inputs = entry["pixels_per_cycle"]
+    pixel_size = entry["bitwidth"] // 8
+    stride = 1
+    name = entry["name"]
+    filename = entry["datafile"]
+    result += f"name={name}\n"
+    result += f"pixel_size={pixel_size}\n"
+    result += f"size={num_inputs}\n"
+    result += f"stride={stride}\n"
+    # based of halide_src
+    filename = os.path.basename(filename)
+    result += f"filename={filename}\n"
+    return result
+
+
 def dump_meta_file(halide_src, app_name, cwd):
     bn = os.path.basename
     dn = os.path.dirname
+    app_folder = dn(halide_src)
     halide_name = bn(dn(dn(halide_src)))
+    halide_config = os.path.join(app_folder, "cgra_config.json")
+    assert os.path.exists(halide_config)
+    with open(halide_config) as f:
+        halide = json.load(f)
+
+    # we use ini style format
+    inputs = ""
+    for input_entry in halide["IOs"]["inputs"]:
+        inputs += "[input]\n"
+        inputs += __generate_entry(input_entry)
+
+    outputs = "[output]\n"
+    outputs += __generate_entry(halide["IOs"]["output"])
+
     with open(os.path.join(cwd, "{0}.meta".format(app_name)), "w+") as f:
+        # pnr section
+        f.write("[pnr]\n")
         f.write("placement={0}.place\n".format(app_name))
         f.write("bitstream={0}.bs\n".format(halide_name))
-        if os.path.exists(os.path.join(cwd, 'bin/input.raw')):
-            ext = '.raw'
-        else:
-            ext = '.pgm'
-        f.write(f"input=input{ext}\n")
-        if os.path.exists(os.path.join(cwd, 'bin/gold.raw')):
-            ext = '.raw'
-        else:
-            ext = '.pgm'
-        f.write(f"output=gold{ext}\n")
+        f.write(inputs)
+        f.write(outputs)
