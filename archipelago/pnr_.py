@@ -17,7 +17,7 @@ class PnRException(Exception):
 
 def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         id_to_name=None, fixed_pos=None, max_num_col=None, compact=False,
-        copy_to_dir=None):
+        copy_to_dir=None, max_frequency=None):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
@@ -85,7 +85,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         raise PnRException()
 
     route_filename = os.path.join(cwd, app_name + ".route")
-    route(packed_file, placement_filename, graph_path, route_filename)
+    route(packed_file, placement_filename, graph_path, route_filename,
+          max_frequency, layout_filename)
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
