@@ -85,8 +85,12 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         raise PnRException()
 
     route_filename = os.path.join(cwd, app_name + ".route")
+    if max_frequency is not None:
+        wave_filename = os.path.join(cwd, app_name + ".wave")
+    else:
+        wave_filename = None
     route(packed_file, placement_filename, graph_path, route_filename,
-          max_frequency, layout_filename)
+          max_frequency, layout_filename, wave_info=wave_filename)
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
@@ -108,6 +112,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
     if copy_to_dir is not None:
         shutil.copy2(placement_filename, copy_to_dir)
         shutil.copy2(route_filename, copy_to_dir)
+        if wave_filename is not None:
+            shutil.copy2(wave_filename, copy_to_dir)
 
     return placement_result, routing_result
 

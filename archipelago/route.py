@@ -4,7 +4,7 @@ import pycyclone
 
 
 def route(packed_filename: str, placement_filename,
-          graph_paths: str, route_result: str, max_frequency, layout=None):
+          graph_paths: str, route_result: str, max_frequency, layout=None, wave_info=None):
     # check input
     tokens = graph_paths.split()
     assert len(tokens) % 2 == 0
@@ -26,4 +26,6 @@ def route(packed_filename: str, placement_filename,
         assert os.path.exists(layout)
         # need to load layout as well
         args += ["-f", str(max_frequency), "-t", "default", "-l", layout]
+        if wave_info is not None:
+            args += ["-w", wave_info]
     subprocess.check_call(args)
