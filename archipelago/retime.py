@@ -77,21 +77,6 @@ class Graph:
         self.id_to_name = id_to_name
         self.bus_width = bus_width
 
-        for net_id, net in netlist.items():
-            src_pin = net[0]
-            src_blk_id, src_port = src_pin
-            src_node = self.__get_node(src_pin)
-            src_node.next[src_port] = net_id
-            for sink in net[1:]:
-                sink_blk, sink_port = sink
-                sink_node = self.__get_node(sink)
-                sink_node.prev[sink_port] = net_id
-                src_node.next_nodes.append(sink_node)
-            if src_port in {"io2f_1", "alu_res_p", "stencil_valid"}:
-                bus_width[net_id] = 1
-            else:
-                bus_width[net_id] = 16
-
         self.const_nodes = self.__get_const_nodes()
         self.constant_pins = self.__get_const_connected_pins()
 
@@ -299,9 +284,8 @@ class Graph:
         return result
 
 
-def retime_netlist(netlist, id_to_name, type_printout=None):
+def retime_netlist(netlist, id_to_name, bus_width, type_printout=None):
     # register input first
-    bus_width = {}
     get_register_inputs(netlist, id_to_name, bus_width)
     # construct the graph
     g = Graph(netlist, id_to_name, bus_width)
@@ -313,7 +297,6 @@ def retime_netlist(netlist, id_to_name, type_printout=None):
             blk_type = node[0]
             if blk_type in type_printout:
                 print(id_to_name[node] + ":", w)
-    return g.bus_width
 
 
 def netlist_to_dot(netlist, filename):
@@ -330,16 +313,17 @@ def load_packing_result(filename):
     import pythunder
     netlist, bus_mode = pythunder.io.load_netlist(filename)
     id_to_name = pythunder.io.load_id_to_name(filename)
-    return netlist, id_to_name
+    return netlist, id_to_name, bus_mode
 
 
 def main():
-    netlist, id_to_name = load_packing_result("harris2.packed")
+    netlist, id_to_name, bus_width = load_packing_result("gaussian.packed")
     netlist_to_dot(netlist, "before.dot")
     pprint.pprint(netlist)
-    bus_width = retime_netlist(netlist, id_to_name)
+    bus_width = retime_netlist(netlist, id_to_name, bus_width=bus_width)
 
     pprint.pprint(bus_width)
+    pprint.pp(netlist)
     netlist_to_dot(netlist, "after.dot")
 
 
