@@ -77,6 +77,20 @@ class Graph:
         self.id_to_name = id_to_name
         self.bus_width = bus_width
 
+        # make sure the reg name is right
+        self.__rename_reg_port()
+
+        for net_id, net in netlist.items():
+            src_pin = net[0]
+            src_blk_id, src_port = src_pin
+            src_node = self.__get_node(src_pin)
+            src_node.next[src_port] = net_id
+            for sink in net[1:]:
+                sink_blk, sink_port = sink
+                sink_node = self.__get_node(sink)
+                sink_node.prev[sink_port] = net_id
+                src_node.next_nodes.append(sink_node)
+
         self.const_nodes = self.__get_const_nodes()
         self.constant_pins = self.__get_const_connected_pins()
 
@@ -130,6 +144,8 @@ class Graph:
                     sink_net_id = node.next[sink_port]
                     sink_pin = (node.blk_id, sink_port)
                     self.__insert_pipeline_reg(sink_pin, sink_net_id, wave_info)
+
+        self.__optimize_for_packing()
 
         if save_dot:
             netlist_to_dot(self.netlist, "after.dot")
@@ -282,6 +298,55 @@ class Graph:
                 for pin in net[1:]:
                     result.add(pin)
         return result
+
+    def __rename_reg_port(self):
+        for net in self.netlist.values():
+            for i in range(len(net)):
+                blk_type, port = net[i]
+                if blk_type[0] == 'r':
+                    net[i] = (blk_type, "reg")
+
+    def __optimize_for_packing(self):
+        # optimize the netlist for packing
+        # we split registers to each PE operands
+        net_ids = list(self.netlist.keys())
+        net_ids.sort()
+        nets_to_remove = set()
+        for net_id in net_ids:
+            net = self.netlist[net_id]
+            if len(net) <= 2:
+                continue
+            if net[0][0][0] != 'r':
+                continue
+            match = True
+            for pin in net[1:]:
+                if pin[0][0][0] != 'p':
+                    match = False
+                    break
+            if not match:
+                continue
+            # now insert another pipeline registers
+            src_pin = net[0]
+            src_node = self.__get_node(src_pin)
+            src_net_id = src_node.prev[src_pin[-1]]
+            src_net = self.netlist[src_net_id]
+            # remove the source pin
+            src_net.remove(src_pin)
+            for sink_pin in net[1:]:
+                sink_node = self.__get_node(sink_pin)
+                new_reg_id = get_new_reg(self.id_to_name)
+                new_reg_pin = (new_reg_id, "reg")
+                new_net = [new_reg_pin, sink_pin]
+                new_net_id = get_new_net_id(self.netlist)
+                self.netlist[new_net_id] = new_net
+                sink_node.prev[sink_pin[-1]] = new_net_id
+                # add the new reg pin to the original net
+                src_net.append(new_reg_pin)
+
+            nets_to_remove.add(net_id)
+
+        for net_id in nets_to_remove:
+            del self.netlist[net_id]
 
 
 def retime_netlist(netlist, id_to_name, bus_width, type_printout=None):
