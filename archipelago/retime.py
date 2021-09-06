@@ -26,30 +26,6 @@ def get_new_net_id(netlist):
             start += 1
 
 
-def get_register_inputs(netlist, id_to_name, bus_width):
-    net_ids = list(netlist.keys())
-    net_ids.sort()
-    for net_id in net_ids:
-        net = netlist[net_id]
-        src_pin = net[0]
-        width = 0
-        if src_pin[0][0] == "i":
-            width = 1
-        elif src_pin[0][0] == "I":
-            width = 16
-        if width > 0:
-            new_net = net[1:]
-            new_reg = get_new_reg(id_to_name)
-            new_pin = (new_reg, "reg")
-            new_net = [new_pin] + new_net
-            net.clear()
-            net.append(src_pin)
-            net.append(new_pin)
-            new_net_id = get_new_net_id(netlist)
-            netlist[new_net_id] = new_net
-            bus_width[new_net_id] = width
-
-
 class Node:
     def __init__(self, blk_id: str):
         self.blk_id = blk_id
@@ -121,9 +97,13 @@ class Graph:
                     assert len(node.prev) == 1
                     for src_port, net_id in node.prev.items():
                         src_pin = (node.blk_id, src_port)
-                        net = self.netlist[net_id]
-                        if net[0][-1] != "reg":
-                            self.__insert_pipeline_reg(src_pin, net_id, wave_info)
+                        self.__insert_pipeline_reg(src_pin, net_id, wave_info)
+                        break
+                elif blk_type in {"i", "I"} and len(node.prev) == 0:
+                    assert len(node.next) == 1
+                    for sink_port, net_id in node.next.items():
+                        sink_pin = (node.blk_id, sink_port)
+                        self.__insert_pipeline_reg(sink_pin, net_id, wave_info)
                         break
                 elif blk_type == "r":
                     # we need to update the dst wave number, which are the same as the source
@@ -186,6 +166,9 @@ class Graph:
         for blk_id, node in self.nodes.items():
             for src_port in node.prev.keys():
                 result[(blk_id, src_port)] = 0
+            if blk_id[0] in {"i", "I"} and len(node.prev) == 0:
+                for sink_port in node.next.keys():
+                    result[(blk_id, sink_port)] = 0
         return result
 
     def __wave_matching(self, node, wave_info):
@@ -351,7 +334,7 @@ class Graph:
 
 def retime_netlist(netlist, id_to_name, bus_width, type_printout=None):
     # register input first
-    get_register_inputs(netlist, id_to_name, bus_width)
+    # get_register_inputs(netlist, id_to_name, bus_width)
     # construct the graph
     g = Graph(netlist, id_to_name, bus_width)
 
@@ -385,9 +368,8 @@ def main():
     netlist, id_to_name, bus_width = load_packing_result("gaussian.packed")
     netlist_to_dot(netlist, "before.dot")
     pprint.pprint(netlist)
-    bus_width = retime_netlist(netlist, id_to_name, bus_width=bus_width)
+    retime_netlist(netlist, id_to_name, bus_width=bus_width, type_printout="iIm")
 
-    pprint.pprint(bus_width)
     pprint.pp(netlist)
     netlist_to_dot(netlist, "after.dot")
 
