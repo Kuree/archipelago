@@ -3,21 +3,34 @@ from typing import Dict, List
 
 
 def get_new_reg(id_to_name):
-    reg_id = len(id_to_name) + 1
-    blk_id = "r" + str(reg_id)
+    start = len(id_to_name)
+    while True:
+        reg_id = start
+        blk_id = "r" + str(reg_id)
+        if blk_id not in id_to_name:
+            break
+        else:
+            start += 1
     blk_name = "REG_{0}".format(reg_id)
     id_to_name[blk_id] = blk_name
     return blk_id
 
 
 def get_new_net_id(netlist):
-    net_id = len(netlist) + 1
-    return "e" + str(net_id)
+    start = len(netlist)
+    while True:
+        net_id = "e" + str(start)
+        if net_id not in netlist:
+            return net_id
+        else:
+            start += 1
 
 
 def get_register_inputs(netlist, id_to_name, bus_width):
-    new_nets = {}
-    for net_id, net in netlist.items():
+    net_ids = list(netlist.keys())
+    net_ids.sort()
+    for net_id in net_ids:
+        net = netlist[net_id]
         src_pin = net[0]
         width = 0
         if src_pin[0][0] == "i":
@@ -32,10 +45,9 @@ def get_register_inputs(netlist, id_to_name, bus_width):
             net.clear()
             net.append(src_pin)
             net.append(new_pin)
-            net_id = get_new_net_id(netlist)
-            new_nets[net_id] = new_net
-            bus_width[net_id] = width
-    netlist.update(new_nets)
+            new_net_id = get_new_net_id(netlist)
+            netlist[new_net_id] = new_net
+            bus_width[new_net_id] = width
 
 
 class Node:
@@ -75,7 +87,7 @@ class Graph:
                 sink_node = self.__get_node(sink)
                 sink_node.prev[sink_port] = net_id
                 src_node.next_nodes.append(sink_node)
-            if src_port in {"io2f_1", "alu_res_p", "valid"}:
+            if src_port in {"io2f_1", "alu_res_p", "stencil_valid"}:
                 bus_width[net_id] = 1
             else:
                 bus_width[net_id] = 16
@@ -94,6 +106,15 @@ class Graph:
             # wave matching first
             blk_type = node.blk_id[0]
             if blk_type in {"r", "c", "C", "I", "i"}:
+                # insert a reg if not done so
+                if blk_type in {"i", "I"} and len(node.next) == 0:
+                    assert len(node.prev) == 1
+                    for src_port, net_id in node.prev.items():
+                        src_pin = (node.blk_id, src_port)
+                        net = self.netlist[net_id]
+                        if net[0][-1] != "reg":
+                            self.__insert_pipeline_reg(src_pin, net_id, wave_info)
+                        break
                 continue
             if blk_type == "m":
                 # memory only needs wave matching
@@ -109,9 +130,6 @@ class Graph:
                     sink_net_id = node.next[sink_port]
                     sink_pin = (node.blk_id, sink_port)
                     new_net_id = self.__insert_pipeline_reg(sink_pin, sink_net_id, wave_info)
-                    node.next[sink_port] = new_net_id
-
-        pprint.pprint(nodes)
 
     @staticmethod
     def __sort_helper(node: Node, visited, stack):
@@ -235,19 +253,17 @@ def netlist_to_dot(netlist, filename):
         f.write("}\n")
 
 
+def load_packing_result(filename):
+    import pythunder
+    netlist, bus_mode = pythunder.io.load_netlist(filename)
+    id_to_name = pythunder.io.load_id_to_name(filename)
+    return netlist, id_to_name
+
+
 def main():
-    netlist = {
-        "e0": [("I0", "io2f_16"), ("p0", "data0"), ("m0", "data_in_0")],
-        "e1": [("p0", "alu_res"), ("p1", "data0")],
-        "e2": [("m0", "data_out_0"), ("p2", "data1")],
-        "e3": [("c0", "out"), ("p1", "data1")],
-        "e4": [("p1", "alu_res"), ("p3", "data0")],
-        "e5": [("p2", "alu_res"), ("p3", "data1"), ("p4", "data1")],
-        "e6": [("p3", "alu_res"), ("p4", "data0")],
-        "e7": [("p4", "alu_res"), ("I1", "f2io_16")]
-    }
+    netlist, id_to_name = load_packing_result("gaussian.packed")
     netlist_to_dot(netlist, "before.dot")
-    id_to_name = {"I0": "I0", "m0": "m0", "p0": "p0", "p1": "p1", "p2": "p2", "c0": "c0", "I1": "I1"}
+    pprint.pprint(netlist)
     bus_width = retime_netlist(netlist, id_to_name)
 
     pprint.pprint(bus_width)
