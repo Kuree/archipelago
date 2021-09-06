@@ -241,6 +241,11 @@ class Graph:
             port = pin[-1]
             assert port in node.next
             node.next[pin[-1]] = new_net_id
+
+            # handle new node info
+            new_reg_node = self.__get_node(new_reg)
+            new_reg_node.prev["reg"] = new_net_id
+            new_reg_node.next["reg"] = net_id
         else:
             # it's a sink
             # if it's a constant, we do nothing
@@ -260,6 +265,11 @@ class Graph:
                 port = pin[-1]
                 assert port in node.prev
                 node.prev[pin[-1]] = new_net_id
+
+                # handle new node info
+                new_reg_node = self.__get_node(new_reg)
+                new_reg_node.prev["reg"] = net_id
+                new_reg_node.next["reg"] = new_net_id
             # only increase the pin wave number
             wave_info[pin] += 1
 
@@ -364,8 +374,24 @@ def load_packing_result(filename):
     return netlist, id_to_name, bus_mode
 
 
+def load_data_from_json(filename):
+    import json
+    with open(filename) as f:
+        data = json.load(f)
+    raw_netlist = data["netlist"]
+    netlist = {}
+    for net_id in raw_netlist:
+        net = raw_netlist[net_id]
+        new_net = []
+        for pin in net:
+            new_net.append(tuple(pin))
+        netlist[net_id] = new_net
+    return netlist, data["id_to_name"], data["bus_width"]
+
+
 def main():
-    netlist, id_to_name, bus_width = load_packing_result("gaussian.packed")
+    # netlist, id_to_name, bus_width = load_packing_result("gaussian.packed")
+    netlist, id_to_name, bus_width = load_data_from_json("data.json")
     netlist_to_dot(netlist, "before.dot")
     pprint.pprint(netlist)
     retime_netlist(netlist, id_to_name, bus_width=bus_width, type_printout="iIm")
