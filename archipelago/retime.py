@@ -225,9 +225,10 @@ class Graph:
             src_pin = pin
             new_net_id = get_new_net_id(self.netlist)
             new_reg_id = get_new_reg(self.id_to_name)
-            new_reg = (new_reg_id, "out")
-            net[0] = new_reg
-            new_net = [src_pin, new_reg]
+            new_reg_out = (new_reg_id, "out")
+            new_reg_in = (new_reg_id, "in")
+            net[0] = new_reg_out
+            new_net = [src_pin, new_reg_in]
             self.netlist[new_net_id] = new_net
             self.bus_width[new_net_id] = self.bus_width[net_id]
             # every source pin in the net has to increase its wave number
@@ -240,7 +241,7 @@ class Graph:
             node.next[pin[-1]] = new_net_id
 
             # handle new node info
-            new_reg_node = self.__get_node(new_reg)
+            new_reg_node = self.__get_node(new_reg_in)
             new_reg_node.prev["in"] = new_net_id
             new_reg_node.next["out"] = net_id
         else:
@@ -252,10 +253,11 @@ class Graph:
             else:
                 idx = net.index(pin)
                 new_reg_id = get_new_reg(self.id_to_name)
-                new_reg = (new_reg_id, "in")
-                net[idx] = new_reg
+                new_reg_in = (new_reg_id, "in")
+                new_reg_out = (new_reg_id, "out")
+                net[idx] = new_reg_in
                 new_net_id = get_new_net_id(self.netlist)
-                new_net = [new_reg, pin]
+                new_net = [new_reg_out, pin]
                 self.netlist[new_net_id] = new_net
                 self.bus_width[new_net_id] = self.bus_width[net_id]
                 node = self.__get_node(pin)
@@ -264,7 +266,7 @@ class Graph:
                 node.prev[pin[-1]] = new_net_id
 
                 # handle new node info
-                new_reg_node = self.__get_node(new_reg)
+                new_reg_node = self.__get_node(new_reg_in)
                 new_reg_node.prev["in"] = net_id
                 new_reg_node.next["out"] = new_net_id
             # only increase the pin wave number
@@ -310,11 +312,12 @@ class Graph:
                 continue
             # now insert another pipeline registers
             src_pin = net[0]
+            renamed_src_pin = (src_pin[0], "in")
             src_node = self.__get_node(src_pin)
-            src_net_id = src_node.prev[src_pin[-1]]
+            src_net_id = src_node.prev["in"]
             src_net = self.netlist[src_net_id]
             # remove the source pin
-            src_net.remove(src_pin)
+            src_net.remove(renamed_src_pin)
             for sink_pin in net[1:]:
                 sink_node = self.__get_node(sink_pin)
                 new_reg_id = get_new_reg(self.id_to_name)
