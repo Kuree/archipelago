@@ -299,14 +299,20 @@ class Graph:
         return result
 
 
-def retime_netlist(netlist, id_to_name):
+def retime_netlist(netlist, id_to_name, type_printout=None):
     # register input first
     bus_width = {}
     get_register_inputs(netlist, id_to_name, bus_width)
     # construct the graph
     g = Graph(netlist, id_to_name, bus_width)
 
-    g.retime()
+    wave = g.retime()
+    if type_printout is not None:
+        print("Wave info:")
+        for node, w in wave.items():
+            blk_type = node[0]
+            if blk_type in type_printout:
+                print(id_to_name[node] + ":", w)
     return g.bus_width
 
 
