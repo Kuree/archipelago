@@ -92,6 +92,12 @@ class Graph:
             else:
                 bus_width[net_id] = 16
 
+        self.const_nodes = self.__get_const_nodes()
+        self.constant_pins = self.__get_const_connected_pins()
+
+        # some pins will be ignored
+        self.__ignore_pins = {"flush"}
+
     def __get_node(self, pin) -> Node:
         node, port = pin
         if node not in self.nodes:
@@ -99,10 +105,15 @@ class Graph:
             self.nodes[node] = n
         return self.nodes[node]
 
-    def retime(self):
+    def retime(self, save_dot=False):
+        if save_dot:
+            netlist_to_dot(self.netlist, "before.dot")
         nodes = self.__sort()
         wave_info = self.__initialize_wave_info()
         for node in nodes:
+            # skip constant nodes
+            if node in self.const_nodes:
+                continue
             # wave matching first
             blk_type = node.blk_id[0]
             if blk_type in {"r", "c", "C", "I", "i"}:
@@ -115,10 +126,14 @@ class Graph:
                         if net[0][-1] != "reg":
                             self.__insert_pipeline_reg(src_pin, net_id, wave_info)
                         break
+                elif blk_type == "r":
+                    # we need to update the dst wave number, which are the same as the source
+                    self.__pass_wave_number(node, wave_info)
                 continue
             if blk_type == "m":
                 # memory only needs wave matching
                 self.__wave_matching(node, wave_info)
+                self.__pass_wave_number(node, wave_info)
             else:
                 assert blk_type == "p"
                 # wave matching first
@@ -129,7 +144,23 @@ class Graph:
                 for sink_port in sink_ports:
                     sink_net_id = node.next[sink_port]
                     sink_pin = (node.blk_id, sink_port)
-                    new_net_id = self.__insert_pipeline_reg(sink_pin, sink_net_id, wave_info)
+                    self.__insert_pipeline_reg(sink_pin, sink_net_id, wave_info)
+
+        if save_dot:
+            netlist_to_dot(self.netlist, "after.dot")
+
+        return Graph.__compute_final_wave_number(wave_info)
+
+    @staticmethod
+    def __compute_final_wave_number(wave_info):
+        result = {}
+        for pin, wave in wave_info.items():
+            blk_id = pin[0]
+            if blk_id not in result:
+                result[blk_id] = wave
+            elif result[blk_id] < wave:
+                result[blk_id] = wave
+        return result
 
     @staticmethod
     def __sort_helper(node: Node, visited, stack):
@@ -161,6 +192,8 @@ class Graph:
         # first pass to determine the max wave
         for src_port in node.prev.keys():
             pin = (node.blk_id, src_port)
+            if pin in self.constant_pins or src_port in self.__ignore_pins:
+                continue
             wave = wave_info[pin]
             if wave > max_wave:
                 max_wave = wave
@@ -169,6 +202,8 @@ class Graph:
         ports.sort()
         for src_port in ports:
             pin = (node.blk_id, src_port)
+            if pin in self.constant_pins or src_port in self.__ignore_pins:
+                continue
             wave = wave_info[pin]
             if wave < max_wave:
                 # insert registers
@@ -179,6 +214,8 @@ class Graph:
         # sanity check
         for src_port in node.prev.keys():
             pin = (node.blk_id, src_port)
+            if pin in self.constant_pins or src_port in self.__ignore_pins:
+                continue
             wave = wave_info[pin]
             assert wave == max_wave
 
@@ -186,6 +223,19 @@ class Graph:
         for sink_port in node.next.keys():
             pin = (node.blk_id, sink_port)
             wave_info[pin] = max_wave
+
+    def __pass_wave_number(self, node, wave_info):
+        # we assume the wave number already match
+        wave_num = 0
+        for src_port in node.prev.keys():
+            pin = (node.blk_id, src_port)
+            wave_num = wave_info[pin]
+            break
+
+        for net_id in node.next.values():
+            net = self.netlist[net_id]
+            for pin in net[1:]:
+                wave_info[pin] = wave_num
 
     def __insert_pipeline_reg(self, pin, net_id, wave_info) -> str:
         net: List = self.netlist[net_id]
@@ -231,6 +281,23 @@ class Graph:
 
         return new_net_id
 
+    def __get_const_nodes(self):
+        # constant nodes are nodes that's not IO but doesn't have source
+        result = set()
+        for node in self.nodes.values():
+            if node.blk_id[0] not in {"i", "I"} and len(node.prev) == 0:
+                result.add(node)
+        return result
+
+    def __get_const_connected_pins(self):
+        result = set()
+        for node in self.const_nodes:
+            for net_id in node.next.values():
+                net = self.netlist[net_id]
+                for pin in net[1:]:
+                    result.add(pin)
+        return result
+
 
 def retime_netlist(netlist, id_to_name):
     # register input first
@@ -261,7 +328,7 @@ def load_packing_result(filename):
 
 
 def main():
-    netlist, id_to_name = load_packing_result("gaussian.packed")
+    netlist, id_to_name = load_packing_result("harris2.packed")
     netlist_to_dot(netlist, "before.dot")
     pprint.pprint(netlist)
     bus_width = retime_netlist(netlist, id_to_name)
