@@ -53,9 +53,6 @@ class Graph:
         self.id_to_name = id_to_name
         self.bus_width = bus_width
 
-        # make sure the reg name is right
-        self.__rename_reg_port()
-
         for net_id, net in netlist.items():
             src_pin = net[0]
             src_blk_id, src_port = src_pin
@@ -228,7 +225,7 @@ class Graph:
             src_pin = pin
             new_net_id = get_new_net_id(self.netlist)
             new_reg_id = get_new_reg(self.id_to_name)
-            new_reg = (new_reg_id, "reg")
+            new_reg = (new_reg_id, "out")
             net[0] = new_reg
             new_net = [src_pin, new_reg]
             self.netlist[new_net_id] = new_net
@@ -244,8 +241,8 @@ class Graph:
 
             # handle new node info
             new_reg_node = self.__get_node(new_reg)
-            new_reg_node.prev["reg"] = new_net_id
-            new_reg_node.next["reg"] = net_id
+            new_reg_node.prev["in"] = new_net_id
+            new_reg_node.next["out"] = net_id
         else:
             # it's a sink
             # if it's a constant, we do nothing
@@ -255,7 +252,7 @@ class Graph:
             else:
                 idx = net.index(pin)
                 new_reg_id = get_new_reg(self.id_to_name)
-                new_reg = (new_reg_id, "reg")
+                new_reg = (new_reg_id, "in")
                 net[idx] = new_reg
                 new_net_id = get_new_net_id(self.netlist)
                 new_net = [new_reg, pin]
@@ -268,8 +265,8 @@ class Graph:
 
                 # handle new node info
                 new_reg_node = self.__get_node(new_reg)
-                new_reg_node.prev["reg"] = net_id
-                new_reg_node.next["reg"] = new_net_id
+                new_reg_node.prev["in"] = net_id
+                new_reg_node.next["out"] = new_net_id
             # only increase the pin wave number
             wave_info[pin] += 1
 
@@ -291,13 +288,6 @@ class Graph:
                 for pin in net[1:]:
                     result.add(pin)
         return result
-
-    def __rename_reg_port(self):
-        for net in self.netlist.values():
-            for i in range(len(net)):
-                blk_type, port = net[i]
-                if blk_type[0] == 'r':
-                    net[i] = (blk_type, "reg")
 
     def __optimize_for_packing(self):
         # optimize the netlist for packing
@@ -328,14 +318,15 @@ class Graph:
             for sink_pin in net[1:]:
                 sink_node = self.__get_node(sink_pin)
                 new_reg_id = get_new_reg(self.id_to_name)
-                new_reg_pin = (new_reg_id, "reg")
-                new_net = [new_reg_pin, sink_pin]
+                new_reg_pin_in = (new_reg_id, "in")
+                new_reg_pin_out = (new_reg_id, "out")
+                new_net = [new_reg_pin_out, sink_pin]
                 new_net_id = get_new_net_id(self.netlist)
                 self.netlist[new_net_id] = new_net
                 self.bus_width[new_net_id] = self.bus_width[net_id]
                 sink_node.prev[sink_pin[-1]] = new_net_id
                 # add the new reg pin to the original net
-                src_net.append(new_reg_pin)
+                src_net.append(new_reg_pin_in)
 
             nets_to_remove.add(net_id)
 
