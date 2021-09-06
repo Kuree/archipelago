@@ -332,6 +332,7 @@ class Graph:
                 new_net = [new_reg_pin, sink_pin]
                 new_net_id = get_new_net_id(self.netlist)
                 self.netlist[new_net_id] = new_net
+                self.bus_width[new_net_id] = self.bus_width[net_id]
                 sink_node.prev[sink_pin[-1]] = new_net_id
                 # add the new reg pin to the original net
                 src_net.append(new_reg_pin)
@@ -355,6 +356,7 @@ def retime_netlist(netlist, id_to_name, bus_width, type_printout=None):
             blk_type = node[0]
             if blk_type in type_printout:
                 print(id_to_name[node] + ":", w)
+    return g.bus_width
 
 
 def netlist_to_dot(netlist, filename):
