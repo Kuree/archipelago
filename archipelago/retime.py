@@ -207,16 +207,17 @@ class Graph:
 
     def __pass_wave_number(self, node, wave_info):
         # we assume the wave number already match
-        wave_num = 0
+        max_wave_num = 0
         for src_port in node.prev.keys():
             pin = (node.blk_id, src_port)
             wave_num = wave_info[pin]
-            break
+            if max_wave_num < wave_num:
+                max_wave_num = wave_num
 
         for net_id in node.next.values():
             net = self.netlist[net_id]
             for pin in net[1:]:
-                wave_info[pin] = wave_num
+                wave_info[pin] = max_wave_num
 
     def __insert_pipeline_reg(self, pin, net_id, wave_info) -> str:
         net: List = self.netlist[net_id]
