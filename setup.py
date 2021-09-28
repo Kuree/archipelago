@@ -6,7 +6,7 @@ setup(
     packages=[
         "archipelago"
     ],
-    version='0.0.8',
+    version='0.0.9',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA PnR based on thunder and cyclone',
