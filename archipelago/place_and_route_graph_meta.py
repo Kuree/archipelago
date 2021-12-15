@@ -25,7 +25,7 @@ class Node:
         elif type_ == "route":
             assert bit_width != None
             self.tile_id = f"{type_ or 0},{route_type or 0},{x or 0},{y or 0},{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
-
+        assert self.tile_id != None
         self.type_ = type_
         self.route_type = route_type
         self.track = track 
@@ -48,7 +48,7 @@ class Node:
         elif self.type_ == "route":
             assert self.bit_width != None
             self.tile_id = f"{self.type_ or 0},{self.route_type or 0},{self.x or 0},{self.y or 0},{self.track or 0},{self.side or 0},{self.io or 0},{self.bit_width or 0},{self.port or 0},{self.net_id or 0},{self.reg_name or 0},{self.rmux_name or 0},{self.reg}"
-
+        assert self.tile_id != None
     def to_route(self):
         assert self.type_ == 'route'
 
@@ -95,6 +95,7 @@ class Graph:
         self.sources: Dict[str, List[str]] = {}
         self.sinks: Dict[str, List[str]] = {}
         self.id_to_name: Dict[str, str] = {}
+        self.node_latencies: Dict[str, int] = {}
         self.added_regs = 0
         self.mems = None
         self.pes = None
@@ -240,6 +241,24 @@ class Graph:
             self.edges.append((node1_name, node2_name))
 
     def update_sources_and_sinks(self):
+        new_nodes = {}
+        for node in self.nodes:
+            g_node = self.get_node(node)
+            g_node.update_tile_id()
+            new_nodes[g_node.tile_id] = g_node
+
+        new_edges = []
+        for (node1_name, node2_name) in self.edges:
+            g_node_1 = self.get_node(node1_name)
+            g_node_2 = self.get_node(node2_name)
+            g_node_1.update_tile_id()
+            g_node_2.update_tile_id()
+            
+            new_edges.append((g_node_1.tile_id, g_node_2.tile_id))
+
+        self.nodes = new_nodes
+        self.edges = new_edges
+
         self.inputs = []
         self.outputs = []
         for node in self.nodes:
@@ -759,7 +778,7 @@ def construct_graph(placement, routes, id_to_name):
                 if node1.route_type == "PORT":
                     tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, node1.port)
                     if (tile_id[0] == "m" and node1.port != "flush"):
-                        node1.reg = True
+                        node2.reg = True
                     graph.add_edge(tile_id, node1)
                 elif node1.route_type == "REG":
                     tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, reg = True)
@@ -775,6 +794,7 @@ def construct_graph(placement, routes, id_to_name):
                     node2.reg = True
                     graph.add_edge(node2, tile_id)
 
+    
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
     for pe in graph.get_ponds():
@@ -782,6 +802,15 @@ def construct_graph(placement, routes, id_to_name):
         for source in sources:
             # if graph.get_node(source).port == port:
             graph.get_node(source).reg = True
+
+    graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
+
+    for node in graph.nodes:
+        if graph.get_node(node).reg:
+            graph.node_latencies[node] = 1
+        else:
+            graph.node_latencies[node] = 0
 
     return graph
 
@@ -919,7 +948,7 @@ def sta(graph):
                 elif g_node.route_type == "RMUX":
                     if graph.get_node(parent).route_type != "REG":
                         comp.available_regs += 1
-                if g_node.reg:
+                if graph.node_latencies[node] != 0:
                     comp.glbs = 0
                     comp.hhops = 0
                     comp.uhops = 0
@@ -1015,7 +1044,6 @@ def reg_into_route(routes, g_break_node_source, new_reg_route_source):
                     return 
 
 def break_crit_path(graph, id_to_name, crit_path, placement, routes):
-    
     break_idx = find_break_idx(graph, crit_path)
 
     break_node_source = crit_path[break_idx][0]
@@ -1048,10 +1076,13 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     graph.added_regs += 1
     
     graph.edges.remove((break_node_source, break_node_dest))
-
     graph.add_node(new_reg_route_source)
+    graph.node_latencies[new_reg_route_source.tile_id] = 1
     graph.add_node(new_reg_tile)
+    graph.node_latencies[new_reg_tile.tile_id] = 0
     graph.add_node(new_reg_route_dest)
+    graph.node_latencies[new_reg_route_dest.tile_id] = 0
+    
 
     graph.add_edge(break_node_source, new_reg_route_source)
     graph.add_edge(new_reg_route_source, new_reg_tile)
@@ -1081,7 +1112,7 @@ def pipeline_input_ios(graph, num_stages, id_to_name, placement, routing):
                 idx += 1
             break_crit_path(graph, id_to_name, path, placement, routing)
 
-def break_at(graph, node1, id_to_name, placement, routing):
+def break_at(graph, node1, id_to_name, placement, routing):    
     path = []
     curr_node = node1
     kernel = graph.get_node(curr_node).kernel
@@ -1093,10 +1124,18 @@ def break_at(graph, node1, id_to_name, placement, routing):
 
     idx = 0
     while len(graph.sources[curr_node]) == 1:
-        if len(graph.sinks[curr_node]) > 1:
+        if len(graph.sinks[curr_node]) > 1 or graph.get_node(graph.sources[curr_node][0]).kernel != kernel:
             break
         path.append((curr_node, idx))
         curr_node = graph.sources[curr_node][0]
+    
+    if curr_node in graph.get_ponds():        
+        print("\t\tFound pond for branch delay matching", curr_node)
+        for source in graph.sources[curr_node]:
+            if graph.get_node(source).port == "flush":
+                continue
+            graph.node_latencies[source] += 1
+        return
 
     if len(path) == 0:
         raise ValueError(f"Cant break at node: {node1}")
@@ -1107,7 +1146,6 @@ def break_at(graph, node1, id_to_name, placement, routing):
     for p in path:
         ret.append((p[0], idx))
         idx += 1
-    
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
@@ -1138,12 +1176,13 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
                 c = node_cycles[parent]
             
             if g_node.type_ == "route":
-                if g_node.reg:
+                # if g_node.reg:
+                if graph.node_latencies[node] != 0:
                     if len(graph.sinks[node]) > 0:
                         child = graph.sinks[node][0]
                         if (child not in id_to_name or "d_reg_" not in id_to_name[child]) and (parent not in graph.get_mems()):
                             if c != None: 
-                                c += 1
+                                c += graph.node_latencies[node]
             if parent not in graph.get_mems():
                 cycles.add(c)
         
@@ -1187,11 +1226,12 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             else:
                 c = node_cycles[g_node.kernel][parent]
             
-            if c != None and g_node.type_ == "route" and g_node.reg:
+            if c != None and g_node.type_ == "route" and graph.node_latencies[node] != 0:
                 if len(graph.sinks[node]) > 0:
                     child = graph.sinks[node][0]
                     if (child not in id_to_name or "d_reg_" not in id_to_name[child]) and (parent not in graph.get_mems()):
-                        c += 1
+                        c += graph.node_latencies[node]
+                      
             if parent in graph.get_mems():
                 cycles.add(0)
             elif not (g_parent.type_ == "route" and g_parent.port == "flush"):
@@ -1346,12 +1386,12 @@ def get_compute_unit_cycles(graph, id_to_name, placement, routing):
                 c = node_cycles[g_node.kernel][parent]
             
             if g_node.type_ == "route":
-                if g_node.reg:
+                if graph.node_latencies[node] != 0:
                     if len(graph.sinks[node]) > 0:
                         child = graph.sinks[node][0]
                         if (child not in id_to_name or "d_reg_" not in id_to_name[child]) and (parent not in graph.get_mems() or parent in graph.get_roms()):
                             if c != None: 
-                                c += 1
+                                c += graph.node_latencies[node]
             if parent not in graph.get_mems() or parent in graph.get_roms():
                 cycles.add(c)
         
@@ -1404,10 +1444,10 @@ def flush_cycles(graph):
         flush_cycles[mem] = 0
         while curr_node != io:
             g_curr_node = graph.get_node(curr_node)
-            if g_curr_node.type_ == "route" and g_curr_node.reg:
-                flush_cycles[mem] += 1
+            if g_curr_node.type_ == "route" and graph.node_latencies[curr_node] != 0:
+                flush_cycles[mem] += graph.node_latencies[curr_node]
 
-            assert len(graph.sources[curr_node]) == 1
+            assert len(graph.sources[curr_node]) == 1, f"{mem} {graph.sources[curr_node]}"
             curr_node = graph.sources[curr_node][0]
 
         # kernel_latencies[graph.get_node(mem).kernel] = flush_cycles[mem]
@@ -1599,6 +1639,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
 
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "flush_latencies")
+    pond_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "pond_latencies")
+
     assert os.path.exists(kernel_latencies_file)
 
     f = open(kernel_latencies_file, "r")
@@ -1607,6 +1649,12 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     kernel_latencies = calculate_latencies(kernel_graph, kernel_latencies)
 
     flush_latencies = {id_to_name[mem_id]: latency for mem_id, latency in flush_latencies.items()}
+    pond_latencies = {}
+    for pond_node, latency in graph.node_latencies.items():
+        g_pond_node = graph.get_node(pond_node)
+        if g_pond_node.port == "data_in_pond":
+            pond_latencies[id_to_name[graph.sinks[pond_node][0]]] = latency
+    
 
 
 #    for kernel, lat in kernel_latencies.items():
@@ -1630,6 +1678,9 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
 
     fout = open(flush_latencies_file, "w")
     fout.write(json.dumps(flush_latencies))
+
+    fout = open(pond_latencies_file, "w")
+    fout.write(json.dumps(pond_latencies))
 
     return kernel_latencies
 
@@ -1698,6 +1749,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
     print("Generating graph of pnr result")
     graph = construct_graph(placement, routing, id_to_name)
     graph.print_graph_tiles_only("pnr_graph_tile")
+    # graph.print_graph("pnr_graph")
     verify_graph(graph)
 
     # tile_graph = construct_tile_graph(graph)
@@ -1708,7 +1760,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
         curr_freq, crit_path, crit_nets = sta(graph)
 
     graph.regs = None
-
+    graph.print_graph("pnr_graph")
 
     kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
 
@@ -1722,7 +1774,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
 
     if False:
         print("Printing graph of pnr result")
-        # graph.print_graph("pnr_graph_post_pipe")
+        graph.print_graph("pnr_graph_post_pipe")
         graph.print_graph_tiles_only("pnr_graph_tile_post_pipe")
         visualize_pnr(graph, crit_nets)
     return placement, routing, id_to_name
