@@ -6,6 +6,7 @@ from .place import place
 from .route import route
 from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
+from .place_and_route_graph_meta import pipeline_pnr
 
 import pycyclone
 
@@ -15,7 +16,7 @@ class PnRException(Exception):
         super(PnRException, self).__init__("Unable to PnR. Sorry! Please check the log")
 
 
-def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
+def pnr(arch, input_netlist=None, load_only=False, target_freq=0, packed_file="", cwd="", app_name="",
         id_to_name=None, fixed_pos=None, max_num_col=None, compact=False,
         copy_to_dir=None, max_frequency=None, shift_registers=False):
     if input_netlist is None and len(packed_file):
@@ -79,7 +80,8 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         has_fixed = False
 
     # do the place and route
-    place(packed_file, layout_filename, placement_filename, has_fixed)
+    if not load_only:
+        place(packed_file, layout_filename, placement_filename, has_fixed)
     # making sure the placement result is there
     if not os.path.isfile(placement_filename):
         raise PnRException()
@@ -89,16 +91,22 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         wave_filename = os.path.join(cwd, app_name + ".wave")
     else:
         wave_filename = None
-    route(packed_file, placement_filename, graph_path, route_filename,
+    
+    if not load_only:
+        route(packed_file, placement_filename, graph_path, route_filename,
           max_frequency, layout_filename, wave_info=wave_filename,
           shift_registers=shift_registers)
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
 
+
     # need to load it back up
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
+
+    placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, target_freq, load_only)
+
 
     # tear down
     if use_temp:
@@ -116,7 +124,7 @@ def pnr(arch, input_netlist=None, packed_file="", cwd="", app_name="",
         if wave_filename is not None:
             shutil.copy2(wave_filename, copy_to_dir)
 
-    return placement_result, routing_result
+    return placement_result, routing_result, id_to_name
 
 
 def __compact_pnr(arch, input_netlist, **kargs):
