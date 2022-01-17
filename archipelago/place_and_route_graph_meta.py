@@ -1770,7 +1770,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
     graph.print_graph_tiles_only("pnr_graph_tile")
     #graph.print_graph("pnr_graph")
     verify_graph(graph)
-    max_itr = 0 
+    max_itr = None
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -1812,8 +1812,8 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
 
-    #dump_routing_result(app_dir, routing) 
-    #dump_placement_result(app_dir, placement, id_to_name)
+    dump_routing_result(app_dir, routing) 
+    dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
 
     if False:
