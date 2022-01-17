@@ -14,7 +14,6 @@ from canal.pnr_io import __parse_raw_routing_result
 from typing import Dict, List, NoReturn, Tuple, Set
 from .new_visualizer import visualize_pnr
 
-
 class Node:
 
     def __init__(self, type_, x, y, tile_id = None, route_type = None, track = None, side = None, io = None, bit_width = None, port = None, net_id = None, reg_name = None, rmux_name = None, reg = False, kernel = None):
@@ -769,8 +768,6 @@ def construct_graph(placement, routes, id_to_name):
     graph.added_regs = max_reg_id + 1
 
     for net_id, net in routes.items():
-        if net_id == "e0" and 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
-            continue
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
                 node1 = segment_to_node(seg1, net_id)
@@ -790,7 +787,7 @@ def construct_graph(placement, routes, id_to_name):
 
                 if node2.route_type == "PORT":
                     tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, node2.port)
-                    #if tile_id[0] == "m":
+                    # if tile_id[0] == "m" and node2.port != "flush":
                     #     node2.reg = True
                     graph.add_edge(node2, tile_id)
                 elif node2.route_type == "REG":
@@ -801,17 +798,11 @@ def construct_graph(placement, routes, id_to_name):
     
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
-    if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
-        for pe in graph.get_ponds()+graph.get_pes():
-            sources = graph.sources[pe]
-            for source in sources:
-                graph.get_node(source).reg = True
-    elif 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
-        for pe in graph.get_pes():
-            sources = graph.sources[pe]
-            for source in sources:
-                graph.get_node(source).reg = True
-
+    for pe in graph.get_pes():
+        sources = graph.sources[pe]
+        for source in sources:
+            # if graph.get_node(source).port == port:
+            graph.get_node(source).reg = True
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
@@ -867,15 +858,15 @@ def construct_tile_graph(graph):
     return tile_graph
 
 def verify_graph(graph):
-    #for node in graph.nodes:
-    #    if len(graph.sources[node]) == 0:
-    #        assert node in graph.inputs
-    #        assert graph.get_node(node).type_ == "tile", f"{node} is a route"
-    #        assert graph.get_node(node).tile_id[0] == "I" or graph.get_node(node).tile_id[0] == "i" or graph.get_node(node).tile_id[0] == "p"
-    #    if len(graph.sinks[node]) == 0:
-    #        assert node in graph.outputs
-    #        assert graph.get_node(node).type_ == "tile", f"{node} is a route"
-    #        assert graph.get_node(node).tile_id[0] == "I" or graph.get_node(node).tile_id[0] == "i"
+    for node in graph.nodes:
+        if len(graph.sources[node]) == 0:
+            assert node in graph.inputs
+            assert graph.get_node(node).type_ == "tile", f"{node} is a route"
+            assert graph.get_node(node).tile_id[0] == "I" or graph.get_node(node).tile_id[0] == "i" or graph.get_node(node).tile_id[0] == "p"
+        if len(graph.sinks[node]) == 0:
+            assert node in graph.outputs
+            assert graph.get_node(node).type_ == "tile", f"{node} is a route"
+            assert graph.get_node(node).tile_id[0] == "I" or graph.get_node(node).tile_id[0] == "i"
 
     while graph.FixCycles():
         pass
@@ -980,7 +971,7 @@ def sta(graph):
 
 
     node_to_timing = {node:timing_info[node].get_total() for node in graph.nodes}
-    node_to_timing = dict(sorted(reversed(list(node_to_timing.items())), key=lambda item: item[1], reverse=True))
+    node_to_timing = dict(sorted(node_to_timing.items(), key=lambda item: item[1], reverse=True))
     max_node = list(node_to_timing.keys())[0]
     max_delay = list(node_to_timing.values())[0]
 
@@ -999,10 +990,7 @@ def sta(graph):
     print("\t",curr_node, timing_info[curr_node].get_total(), "glb:", timing_info[curr_node].glbs, "horiz hops:",  timing_info[curr_node].hhops, "up hops:",  timing_info[curr_node].uhops, "down hops:",  timing_info[curr_node].dhops, "pes:", timing_info[curr_node].pes, "mems:", timing_info[curr_node].mems, "regs:", timing_info[curr_node].available_regs)
     crit_path = []
     crit_path.append((curr_node, timing_info[curr_node].get_total()))
-    crit_edges = []
     while(True):
-        if (timing_info[curr_node].parent, curr_node) in graph.edges:
-            crit_edges.append((timing_info[curr_node].parent, curr_node))
         curr_node = timing_info[curr_node].parent
         if curr_node == None:
             break
@@ -1020,7 +1008,7 @@ def sta(graph):
     #     if idx > 500:
     #         break
     #     print(curr_node, timing_info[curr_node].get_total(), timing_info[curr_node].glbs, timing_info[curr_node].hops, timing_info[curr_node].pes, timing_info[curr_node].mems, timing_info[curr_node].available_regs)
-    return clock_speed, crit_path, crit_edges
+    return clock_speed, crit_path, net_ids
 
 
 
@@ -1141,8 +1129,6 @@ def break_at(graph, node1, id_to_name, placement, routing):
             break
         path.append((curr_node, idx))
         curr_node = graph.sources[curr_node][0]
-        if curr_node in graph.get_ponds():
-            break
     
     if curr_node in graph.get_ponds():        
         print("\t\tFound pond for branch delay matching", curr_node)
@@ -1462,7 +1448,7 @@ def flush_cycles(graph):
             if g_curr_node.type_ == "route" and graph.node_latencies[curr_node] != 0:
                 flush_cycles[mem] += graph.node_latencies[curr_node]
 
-            #assert len(graph.sources[curr_node]) == 1, f"{mem} {graph.sources[curr_node]}"
+            assert len(graph.sources[curr_node]) == 1, f"{mem} {graph.sources[curr_node]}"
             curr_node = graph.sources[curr_node][0]
 
         # kernel_latencies[graph.get_node(mem).kernel] = flush_cycles[mem]
@@ -1643,7 +1629,7 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     kernel_graph = construct_kernel_graph(graph, compute_latencies, flush_latencies)
 
     print("\nBranch delay matching kernels")
-    #branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
+    branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
     print("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
@@ -1761,66 +1747,36 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
 
-    import copy
-    placement_save = copy.deepcopy(placement)
-    routing_save = copy.deepcopy(routing)
-    id_to_name_save = copy.deepcopy(id_to_name)
-
+    print("Generating graph of pnr result")
     graph = construct_graph(placement, routing, id_to_name)
     graph.print_graph_tiles_only("pnr_graph_tile")
     #graph.print_graph("pnr_graph")
     verify_graph(graph)
-    max_itr = 0 
-    curr_freq = 0
-    itr = 0
-    curr_freq, crit_path, crit_nets = sta(graph)
-    while max_itr == None:
-            try:
-                kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-                break_crit_path(graph, id_to_name, crit_path, placement, routing)
-                curr_freq, crit_path, crit_nets = sta(graph)
-                graph.regs = None
-                kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-            except:
-                print("max_itr set")
-                max_itr = itr
-            itr += 1
 
-    id_to_name = id_to_name_save
-    placement = placement_save
-    routing = routing_save
-    graph = construct_graph(placement, routing, id_to_name)
-    graph.print_graph_tiles_only("pnr_graph_tile")
-    #graph.print_graph("pnr_graph")
-    verify_graph(graph)
     curr_freq, crit_path, crit_nets = sta(graph)
-
-    for _ in range(max_itr):
-            break_crit_path(graph, id_to_name, crit_path, placement, routing)
-            curr_freq, crit_path, crit_nets = sta(graph)
+    while curr_freq <= target_freq:
+        break_crit_path(graph, id_to_name, crit_path, placement, routing)
+        curr_freq, crit_path, crit_nets = sta(graph)
 
     graph.regs = None
 
-    graph.print_graph_tiles_only("pnr_graph_tile_post_pipe")
-            
+    #return placement, routing, id_to_name
+
     kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
 
     #if min(kernel_latencies.values()) < 0:
     #    pipeline_input_ios(graph, -(min(kernel_latencies.values())), id_to_name, placement, routing)
     #    kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-    freq_file = os.path.join(app_dir, "design.freq")
-    fout = open(freq_file, "w")
-    fout.write(f"{curr_freq}\n")
-
-    #dump_routing_result(app_dir, routing) 
-    #dump_placement_result(app_dir, placement, id_to_name)
+   
+    dump_routing_result(app_dir, routing) 
+    dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
 
     if False:
         print("Printing graph of pnr result")
         graph.print_graph("pnr_graph_post_pipe")
         graph.print_graph_tiles_only("pnr_graph_tile_post_pipe")
-    visualize_pnr(graph, crit_nets)
+        visualize_pnr(graph, crit_nets)
     return placement, routing, id_to_name
 
 def main():

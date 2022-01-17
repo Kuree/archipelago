@@ -202,16 +202,12 @@ class Visualizer():
             else:
                 stack.append(new_node)
 
-    def draw_routes(self, draw, crit_net = None):
+    def draw_routes(self, draw, crit_edges = None):
         color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
         net_colors = {}
         for node in self.graph.nodes:
             net_id = self.graph.get_node(node).net_id
-            if crit_net != None:
-                if net_id in crit_net:
-                    net_colors[net_id] = (255, 0, 0, 255)
-            else:
-                net_colors[net_id] = color()
+            net_colors[net_id] = color()
 
         for edge in self.graph.edges:
             src_node = self.graph.get_node(edge[0])
@@ -222,81 +218,96 @@ class Visualizer():
 
             if src_node.x == dst_node.x and src_node.y == dst_node.y:
                 continue
+            elif src_node.x == dst_node.x:
+                edge_dir = "v"
+            else:
+                edge_dir = "h"
 
             if src_node.net_id not in net_colors:
                 continue
             
-            route_color = net_colors[src_node.net_id]
+            if crit_edges != None and edge in crit_edges:
+                route_color = (255, 0, 0, 255)
+            elif crit_edges != None:
+                continue
+            else:
+                route_color = net_colors[src_node.net_id]
 
             x1 = src_node.x
             y1 = src_node.y
             x2 = dst_node.x
             y2 = dst_node.y
             track = src_node.track
-            end_offset = 0.5
-            start_offset = 0.5
+            start_track = 0
+            end_track = 0
 
             if track == None:
                 track = dst_node.track
                 if track == None:
-                    # Hacky, but we need to look back to the last SB to find the track for this connection
-                    # track = self.get_prev_track(edge[0])
                     track = 0
 
+            curr_node = edge[0]
+            while len(self.graph.sources[curr_node]) == 1:
+                curr_node = self.graph.sources[curr_node][0]
+                curr_node_g = self.graph.get_node(curr_node)
+                if src_node.x != curr_node_g.x or src_node.y != curr_node_g.y:
+                    prev_edge_dir = edge_dir
+                    if src_node.x == curr_node_g.x and src_node.y != curr_node_g.y:
+                        prev_edge_dir = "v"
+                    elif src_node.x != curr_node_g.x and src_node.y == curr_node_g.y:
+                        prev_edge_dir = "h"
 
-            # # start offset first
-            # self.get_prev_track(edge[0])
-            # if len(self.graph.sources[edge[0]]) > 0:
-            #     changed_track = self.graph.get_node(self.graph.sources[edge[0]][0]).track
+                    if edge_dir != prev_edge_dir:
+                        if curr_node_g.track == None:
+                            continue
+                        start_track = curr_node_g.track
+                    break      
 
-            #     if changed_track != None:
-            #         start_offset = (int(changed_track) / self.num_tracks) * 0.6
+            curr_node = edge[0]
+            while len(self.graph.sinks[curr_node]) == 1:
+                curr_node = self.graph.sinks[curr_node][0]
+                curr_node_g = self.graph.get_node(curr_node)
+                if dst_node.x != curr_node_g.x or dst_node.y != curr_node_g.y:
+                    next_edge_dir = edge_dir
+                    if dst_node.x == curr_node_g.x and dst_node.y != curr_node_g.y:
+                        next_edge_dir = "v"
+                    elif dst_node.x != curr_node_g.x and dst_node.y == curr_node_g.y:
+                        next_edge_dir = "h"
 
+                    if edge_dir != next_edge_dir:
+                        if curr_node_g.track == None:
+                            continue
+                        end_track = curr_node_g.track
+                    break                
 
-            # if len(route["segments"]) > idx + 2:
-            #     seg3 = route["segments"][idx + 2]
-            #     track3 = seg3['track']
-
-            #     change_dir = not ((x1 == x2 == seg3['x']) or (y1 == y2 == seg3['y']))
-
-            #     # Assuming if route changes track its changing direction too
-            #     if track != track3 or change_dir:
-            #         end_offset = (track3 / self.num_tracks) * 0.6 + 0.2
-
-            # change_dir = False
-            # if idx > 0:
-            #     change_dir = not ((x1 == x2 == route["segments"][idx - 1]['x']) or (y1 == y2 == route["segments"][idx - 1]['y']))
-
-
-            # # Assuming if route changes track its changing direction too
-            # if track != track4 or change_dir:
-            #     start_offset = (track4 / self.num_tracks) * 0.6 + 0.2
-
-            track_offset = (int(track) / self.num_tracks) * 0.6
+            start_offset = (start_track / self.num_tracks) * 0.6 + 0.2
+            end_offset = (end_track / self.num_tracks) * 0.6 + 0.2
+            track_offset = (int(track) / self.num_tracks) * 0.6 + 0.2
             
             if src_node.bit_width == 1:
                 route_width = 2
             else:
                 route_width = 4
 
-            if x1 == x2:
+            if edge_dir == "v":
                 # Vertical trace
                 # draw.line(((x1 + 0.2 + track_offset) * scale, (y1 + start_offset) * scale, (x2 + 0.2 + track_offset) * scale, (y2 + end_offset) * scale), fill=route_color, width=2)
-                arrowedLine(draw, ((x1 + 0.2 + track_offset) * self.scale, (y1 + start_offset) * self.scale), ((x2 + 0.2 + track_offset) * self.scale, (y2 + end_offset) * self.scale), color=route_color, size=route_width)
+                arrowedLine(draw, ((x1 + track_offset) * self.scale, (y1 + start_offset) * self.scale), ((x2 + track_offset) * self.scale, (y2 + end_offset) * self.scale), color=route_color, size=route_width)
             else:
                 # Horizontal trace
-                # draw.line(((x1 + start_offset) * self.scale, (y1 + 0.2 + track_offset) * self.scale, (x2 + end_offset) * self.scale, (y2 + 0.2 + track_offset) * self.scale), fill=route_color, width=2)
-                arrowedLine(draw,((x1 + start_offset) * self.scale, (y1 + 0.2 + track_offset) * self.scale), ((x2 + end_offset) * self.scale, (y2 + 0.2 + track_offset) * self.scale), color=route_color, size=route_width)
+                # draw.line(((x1 + start_offset) * self.scale, (y1 + track_offset) * self.scale, (x2 + end_offset) * self.scale, (y2 + track_offset) * self.scale), fill=route_color, width=2)
+                arrowedLine(draw,((x1 +start_offset) * self.scale, (y1 + track_offset) * self.scale), ((x2 +end_offset) * self.scale, (y2 + track_offset) * self.scale), color=route_color, size=route_width)
 
     def draw_tiles(self, draw):
-        # board_pos = self.graph.nodes
-        # blk_id_list = list(board_pos.keys())
-        # blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
-        for blk_id in self.graph.nodes:
+        board_pos = self.graph.nodes
+        blk_id_list = list(board_pos.keys())
+        blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
+        for blk_id in blk_id_list:
             node = self.graph.get_node(blk_id)
 
             if node.type_ == "route":
                 continue
+
 
             index = self.color_index.index(blk_id[0])
             color = self.color_palette[index]
@@ -324,7 +335,7 @@ class Visualizer():
                     draw.rectangle((x * self.scale + 1 + shrink2, y * self.scale + 1 + shrink, x * self.scale + width - shrink,
                                 y * self.scale + size - shrink2), fill=color)
 
-def visualize_pnr(graph, crit_net):
+def visualize_pnr(graph, crit_edges):
 
     width = 0
     height = 0
@@ -335,7 +346,7 @@ def visualize_pnr(graph, crit_net):
     height += 1
 
 
-    color_index = "imoprcdIA"
+    color_index = "imoprMcdIA"
     color_palette = [(166, 206, 227),
                 (31, 120, 180),
                 (178, 223, 138),
@@ -371,8 +382,8 @@ def visualize_pnr(graph, crit_net):
 
     visualizer.draw_tiles(draw)
 
-    if crit_net != None:
-        visualizer.draw_routes(draw, crit_net)
+    if crit_edges != None:
+        visualizer.draw_routes(draw, crit_edges)
 
     im.save(f'pnr_result.png', format='PNG')
 
