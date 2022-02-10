@@ -1,13 +1,15 @@
-import random
 import sys
-from PIL import Image, ImageDraw
-from archipelago.io import load_routing_result
-from pycyclone.io import load_placement
-import math
 import os
-import re
+import random
+import math
 import argparse
+
+from PIL import Image, ImageDraw
 from typing import Dict, List, Tuple, Set
+
+from pycyclone.io import load_placement
+from canal.pnr_io import __parse_raw_routing_result
+from .pipeline import construct_graph, sta, load_netlist
 
 def parse_args():
     parser = argparse.ArgumentParser("PnR Visualization tool")
@@ -225,15 +227,12 @@ class Visualizer():
                     crit_tiles.append((src_node.x, src_node.y))
                 if dst_node.type_ == 'tile':
                     crit_tiles.append((dst_node.x, dst_node.y))
-<<<<<<< HEAD:archipelago/visualize.py
                 elif dst_node.route_type == "SB":
                     if len(self.graph.sinks[edge[1]]) > 0 and len(self.graph.sinks[self.graph.sinks[edge[1]][0]]) == 1:
                         if self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0]).type_ == "tile":
                             new_dst = self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0])
                             crit_tiles.append((new_dst.x, new_dst.y))
                     
-=======
->>>>>>> a152945c4ca515cb8d92f4987257a3a7182ba1a7:archipelago/new_visualizer.py
 
             if src_node.type_ == 'tile' or dst_node.type_ == 'tile':
                 continue
@@ -365,7 +364,7 @@ class Visualizer():
                     draw.rectangle((x * self.scale + 1 + shrink2, y * self.scale + 1 + shrink, x * self.scale + width - shrink,
                                 y * self.scale + size - shrink2), fill=color)
 
-def visualize_pnr(graph, crit_edges):
+def visualize_pnr(graph, crit_edges, app_dir):
 
     width = 0
     height = 0
@@ -374,7 +373,6 @@ def visualize_pnr(graph, crit_edges):
         height = max(height, graph.get_node(node).y)
     width += 1
     height += 1
-
 
     color_index = "imoprMcdIA"
     color_palette = [(166, 206, 227),
@@ -396,12 +394,6 @@ def visualize_pnr(graph, crit_edges):
     num_tracks = 5
 
     visualizer = Visualizer(img_width, img_height, width, height, scale, num_tracks, graph, color_index, color_palette)
-
-    # visualizer.parse_raw_routing_result()
-
-    # visualizer.sort_segments()
-
-    # ordered_routes, visited_points = sort_routes(routes_list)
    
     im = Image.new("RGBA", (img_width, img_height), "BLACK")
     draw = ImageDraw.Draw(im)
@@ -416,9 +408,36 @@ def visualize_pnr(graph, crit_edges):
         visualizer.draw_tiles(draw, crit_tiles)
         crit_tiles = visualizer.draw_routes(draw, darken = False, crit_edges = crit_edges)
 
-    im.save(f'pnr_result.png', format='PNG')
+    im.save(f'{app_dir}/pnr_result.png', format='PNG')
 
+def parse_args():
+    parser = argparse.ArgumentParser("CGRA Retiming tool")
+    parser.add_argument("-a", "--app", "-d", required=True, dest="application", type=str, help="Application directory")
+    args = parser.parse_args()
+    dirname = os.path.join(args.application, "bin")
+    netlist = os.path.join(dirname, "design.packed")
+    assert os.path.exists(netlist), netlist + " does not exist"
+    placement = os.path.join(dirname, "design.place")
+    assert os.path.exists(placement), placement + " does not exists"
+    route = os.path.join(dirname, "design.route")
+    assert os.path.exists(route), route + " does not exists"
+    return netlist, placement, route
+
+def main():
+    netlist_file, placement_file, routing_file = parse_args()
+
+    print("Loading netlist")
+    netlist, id_to_name = load_netlist(netlist_file)
+    print("Loading placement")
+    placement = load_placement(placement_file)
+    print("Loading routing")
+    routing = __parse_raw_routing_result(routing_file)
+
+    app_dir = os.path.dirname(netlist_file)
+    graph = construct_graph(placement, routing, id_to_name)
+
+    visualize_pnr(graph, None, app_dir)
 
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-    visualize_pnr()
+    main()
