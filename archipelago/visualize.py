@@ -202,16 +202,35 @@ class Visualizer():
             else:
                 stack.append(new_node)
 
-    def draw_routes(self, draw, crit_edges = None):
-        color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
+    def draw_routes(self, draw, darken = False, crit_edges = None):
+        if darken:
+            color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 128)
+        else:
+            color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
         net_colors = {}
         for node in self.graph.nodes:
             net_id = self.graph.get_node(node).net_id
             net_colors[net_id] = color()
+            #if darken:
+            #    net_colors[net_id] = (int(color()[0]/2), int(color()[1]/2), int(color()[2]/2))
+
+        crit_tiles = []
 
         for edge in self.graph.edges:
             src_node = self.graph.get_node(edge[0])
             dst_node = self.graph.get_node(edge[1])
+
+            if crit_edges != None and edge in crit_edges:
+                if src_node.type_ == 'tile':
+                    crit_tiles.append((src_node.x, src_node.y))
+                if dst_node.type_ == 'tile':
+                    crit_tiles.append((dst_node.x, dst_node.y))
+                elif dst_node.route_type == "SB":
+                    if len(self.graph.sinks[edge[1]]) > 0 and len(self.graph.sinks[self.graph.sinks[edge[1]][0]]) == 1:
+                        if self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0]).type_ == "tile":
+                            new_dst = self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0])
+                            crit_tiles.append((new_dst.x, new_dst.y))
+                    
 
             if src_node.type_ == 'tile' or dst_node.type_ == 'tile':
                 continue
@@ -298,7 +317,9 @@ class Visualizer():
                 # draw.line(((x1 + start_offset) * self.scale, (y1 + track_offset) * self.scale, (x2 + end_offset) * self.scale, (y2 + track_offset) * self.scale), fill=route_color, width=2)
                 arrowedLine(draw,((x1 +start_offset) * self.scale, (y1 + track_offset) * self.scale), ((x2 +end_offset) * self.scale, (y2 + track_offset) * self.scale), color=route_color, size=route_width)
 
-    def draw_tiles(self, draw):
+        return crit_tiles
+
+    def draw_tiles(self, draw, crit_tiles):
         board_pos = self.graph.nodes
         blk_id_list = list(board_pos.keys())
         blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
@@ -310,8 +331,11 @@ class Visualizer():
 
 
             index = self.color_index.index(blk_id[0])
-            color = self.color_palette[index]
-
+            if crit_tiles != None:
+                if (node.x, node.y) in crit_tiles:
+                    color = self.color_palette[index]
+                else:
+                    color = (int(self.color_palette[index][0]/2), int(self.color_palette[index][1]/2), int(self.color_palette[index][2]/2))
 
             width_frac = 1
             size = self.scale - 1
@@ -327,6 +351,9 @@ class Visualizer():
             for src in self.graph.sources[blk_id]:
                 if self.graph.get_node(src).reg:
                     color = self.color_palette[self.color_index.index("r")]
+                    if (node.x, node.y) not in crit_tiles:
+                        color = (int(color[0]/2), int(color[1]/2), int(color[2]/2))
+
                     width_frac = 1
                     size = self.scale - 1
                     width = size * width_frac
@@ -378,12 +405,13 @@ def visualize_pnr(graph, crit_edges):
 
     visualizer.draw_grid(draw)
 
-    visualizer.draw_routes(draw)
-
-    visualizer.draw_tiles(draw)
+    crit_tiles = visualizer.draw_routes(draw, darken = (crit_edges != None))
+    visualizer.draw_tiles(draw, crit_tiles)
 
     if crit_edges != None:
-        visualizer.draw_routes(draw, crit_edges)
+        crit_tiles = visualizer.draw_routes(draw, darken = False, crit_edges = crit_edges)
+        visualizer.draw_tiles(draw, crit_tiles)
+        crit_tiles = visualizer.draw_routes(draw, darken = False, crit_edges = crit_edges)
 
     im.save(f'pnr_result.png', format='PNG')
 
