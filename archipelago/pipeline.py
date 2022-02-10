@@ -12,7 +12,6 @@ from pycyclone.io import load_placement
 # parse raw routing result
 from canal.pnr_io import __parse_raw_routing_result
 from typing import Dict, List, NoReturn, Tuple, Set
-from .new_visualizer import visualize_pnr
 from .pnr_graph import Node, Graph, KernelNode, KernelGraph
 
 def parse_args():
@@ -1026,6 +1025,5 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
 
-    visualize_pnr(graph, crit_nets)
 
     return placement, routing, id_to_name
