@@ -1,9 +1,9 @@
 import os
 import argparse
+import sys
 from pycyclone.io import load_placement
-from canal.pnr_io import __parse_raw_routing_result
-from .pipeline import construct_graph, sta, load_netlist
-
+from archipelago.pipeline import construct_graph, sta, load_netlist
+import archipelago.io as io
 
 def sta_analysis(app_dir, placement, routing, id_to_name):
     graph = construct_graph(placement, routing, id_to_name)
@@ -31,7 +31,7 @@ def main():
     print("Loading placement")
     placement = load_placement(placement_file)
     print("Loading routing")
-    routing = __parse_raw_routing_result(routing_file)
+    routing = io.load_routing_result(routing_file)
 
     app_dir = os.path.dirname(netlist_file)
 
