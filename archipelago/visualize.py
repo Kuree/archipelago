@@ -225,12 +225,15 @@ class Visualizer():
                     crit_tiles.append((src_node.x, src_node.y))
                 if dst_node.type_ == 'tile':
                     crit_tiles.append((dst_node.x, dst_node.y))
+<<<<<<< HEAD:archipelago/visualize.py
                 elif dst_node.route_type == "SB":
                     if len(self.graph.sinks[edge[1]]) > 0 and len(self.graph.sinks[self.graph.sinks[edge[1]][0]]) == 1:
                         if self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0]).type_ == "tile":
                             new_dst = self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0])
                             crit_tiles.append((new_dst.x, new_dst.y))
                     
+=======
+>>>>>>> a152945c4ca515cb8d92f4987257a3a7182ba1a7:archipelago/new_visualizer.py
 
             if src_node.type_ == 'tile' or dst_node.type_ == 'tile':
                 continue

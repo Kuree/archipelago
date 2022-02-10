@@ -872,7 +872,7 @@ def verify_graph(graph):
     
     
 PE_DELAY = 700
-MEM_DELAY = 0
+MEM_DELAY = 800
 SB_UP_DELAY = 90
 SB_DOWN_DELAY = 190
 SB_HORIZONTAL_DELAY = 140
@@ -1616,17 +1616,13 @@ def calculate_latencies(kernel_graph, kernel_latencies):
             f_kernel = kernel.split("hcompute_")[1]
             if f_kernel in sorted_new_latencies:
                 new_lat = sorted_new_latencies[f_kernel]
-                #print("Found inexact kernel:", kernel, f_kernel)
             else:
                 for f_kernel, lat in sorted_new_latencies.items():
                     if kernel in f_kernel:
                         new_lat = sorted_new_latencies[f_kernel]
                         break
                 if kernel not in f_kernel:
-                    #print("Did not find kernel", kernel)
-                    new_lat = None
-                #else:
-                    #print("Found inexact kernel:", kernel, f_kernel)
+                   new_lat = None
         if new_lat != None:
             kernel_latencies[kernel] = new_lat
     return kernel_latencies
@@ -1678,14 +1674,6 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     #            kernel_latencies[kernel] -= flush_latencies[f_kernel_name]
     #            flush_latencies[f_kernel_name] = 0
     #            print("Adjusted", kernel, f_kernel_name)
-
-    #print("Final Kernel Latencies")
-    #for kernel, latency in kernel_latencies.items():
-    #    print("\t", kernel, latency)
-
-    #print("Final Flush Latencies")
-    #for kernel, latency in flush_latencies.items():
-    #    print("\t", kernel, latency)
 
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(kernel_latencies))
