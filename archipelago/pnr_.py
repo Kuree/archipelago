@@ -7,7 +7,7 @@ from .route import route
 from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
 from .pipeline import pipeline_pnr, sta
-
+from .sta import sta_analysis
 import pycyclone
 
 

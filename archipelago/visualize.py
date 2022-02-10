@@ -6,10 +6,9 @@ import argparse
 
 from PIL import Image, ImageDraw
 from typing import Dict, List, Tuple, Set
-
+from archipelago.io import load_routing_result
 from pycyclone.io import load_placement
-from canal.pnr_io import __parse_raw_routing_result
-from .pipeline import construct_graph, sta, load_netlist
+from archipelago.pipeline import construct_graph, sta, load_netlist
 
 def parse_args():
     parser = argparse.ArgumentParser("PnR Visualization tool")
@@ -431,12 +430,13 @@ def main():
     print("Loading placement")
     placement = load_placement(placement_file)
     print("Loading routing")
-    routing = __parse_raw_routing_result(routing_file)
+    routing = load_routing_result(routing_file)
 
     app_dir = os.path.dirname(netlist_file)
     graph = construct_graph(placement, routing, id_to_name)
 
     visualize_pnr(graph, None, app_dir)
+    print(f"Saved to {app_dir}/pnr_result.png")
 
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(os.path.realpath(__file__)))

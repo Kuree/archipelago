@@ -10,9 +10,8 @@ from graphviz import Digraph
 
 from pycyclone.io import load_placement
 # parse raw routing result
-from canal.pnr_io import __parse_raw_routing_result
 from typing import Dict, List, NoReturn, Tuple, Set
-from .pnr_graph import Node, Graph, KernelNode, KernelGraph
+import archipelago.pnr_graph as pnr_graph
 
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
@@ -96,16 +95,16 @@ def load_shift_regs(shift_regs_file, pe_reg):
 def segment_to_node(segment, net_id):
     if segment[0] == "SB":
         track, x, y, side, io_, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "SB", track = track, side = side, io = io_, bit_width = bit_width, net_id = net_id)
+        node1 = pnr_graph.Node("route", x, y, route_type = "SB", track = track, side = side, io = io_, bit_width = bit_width, net_id = net_id)
     elif segment[0] == "PORT":
         port_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "PORT", bit_width = bit_width, net_id = net_id, port = port_name)
+        node1 = pnr_graph.Node("route", x, y, route_type = "PORT", bit_width = bit_width, net_id = net_id, port = port_name)
     elif segment[0] == "REG":
         reg_name, track, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "REG", track = track, bit_width = bit_width, net_id = net_id, reg_name = reg_name)
+        node1 = pnr_graph.Node("route", x, y, route_type = "REG", track = track, bit_width = bit_width, net_id = net_id, reg_name = reg_name)
     elif segment[0] == "RMUX":
         rmux_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "RMUX", bit_width = bit_width, net_id = net_id, rmux_name = rmux_name)
+        node1 = pnr_graph.Node("route", x, y, route_type = "RMUX", bit_width = bit_width, net_id = net_id, rmux_name = rmux_name)
     else:
         raise ValueError("Unrecognized route type")
     return node1
@@ -140,7 +139,7 @@ def get_tile_at(x, y, bw, placement, port = "", reg = False):
 
 
 def construct_graph(placement, routes, id_to_name):
-    graph = Graph()
+    graph = pnr_graph.Graph()
     graph.id_to_name = id_to_name
     max_reg_id = 0
 
@@ -149,7 +148,7 @@ def construct_graph(placement, routes, id_to_name):
             kernel = graph.id_to_name[blk_id].split("$")[0]
         else:
             kernel = None
-        node = Node("tile", place[0], place[1], tile_id=blk_id, kernel = kernel)
+        node = pnr_graph.Node("tile", place[0], place[1], tile_id=blk_id, kernel = kernel)
         graph.add_node(node)
         max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
@@ -202,7 +201,7 @@ def construct_graph(placement, routes, id_to_name):
     return graph
 
 def construct_tile_graph(graph):
-    tile_graph = Graph()
+    tile_graph = pnr_graph.Graph()
     
     for source in graph.get_tiles():
         tile_graph.add_node(graph.get_node(source))
@@ -359,7 +358,7 @@ def sta(graph):
 
     curr_node = max_node
     net_ids.add(graph.get_node(curr_node).net_id)
-    print("\t",curr_node, timing_info[curr_node].get_total(), "glb:", timing_info[curr_node].glbs, "horiz hops:",  timing_info[curr_node].hhops, "up hops:",  timing_info[curr_node].uhops, "down hops:",  timing_info[curr_node].dhops, "pes:", timing_info[curr_node].pes, "mems:", timing_info[curr_node].mems, "regs:", timing_info[curr_node].available_regs)
+    print(f"\t{curr_node}", "glb:", timing_info[curr_node].glbs, "horiz hops:",  timing_info[curr_node].hhops, "up hops:",  timing_info[curr_node].uhops, "down hops:",  timing_info[curr_node].dhops, "pes:", timing_info[curr_node].pes, "mems:", timing_info[curr_node].mems, "\n")
     crit_path = []
     crit_path.append((curr_node, timing_info[curr_node].get_total()))
     crit_edges = []
@@ -374,7 +373,7 @@ def sta(graph):
 
     crit_path.reverse()
 
-    print("\tCritical Path Nets:", *net_ids)
+    #print("\tCritical Path Nets:", *net_ids)
 
     return clock_speed, crit_path, crit_edges
 
@@ -438,7 +437,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     new_reg_route_source.reg = True
     new_reg_route_source.update_tile_id()
     new_reg_route_dest = segment_to_node(new_segment, net_id)
-    new_reg_tile = Node("tile", x, y, tile_id=f"r_ADDED{graph.added_regs}", kernel = kernel)
+    new_reg_tile = pnr_graph.Node("tile", x, y, tile_id=f"r_ADDED{graph.added_regs}", kernel = kernel)
     graph.added_regs += 1
     
     graph.edges.remove((break_node_source, break_node_dest))
@@ -758,7 +757,7 @@ def flush_cycles(graph):
     return flush_cycles
 
 def construct_kernel_graph(graph, new_latencies, flush_latencies):
-    kernel_graph = KernelGraph()
+    kernel_graph = pnr_graph.KernelGraph()
 
     graph.regs = None
     graph.shift_regs = None
@@ -771,24 +770,24 @@ def construct_kernel_graph(graph, new_latencies, flush_latencies):
     for source in graph.get_tiles():
         if source in compute_tiles:
             source_id = graph.get_node(source).kernel
-            kernel_graph.add_node(KernelNode(kernel = source_id))
+            kernel_graph.add_node(pnr_graph.KernelNode(kernel = source_id))
             kernel_graph.get_node(source_id).latency = new_latencies[source_id]
             kernel_graph.get_node(source_id).type_ = "compute"
         else:
             source_id = source 
-            kernel_graph.add_node(KernelNode(mem_id = source_id))
+            kernel_graph.add_node(pnr_graph.KernelNode(mem_id = source_id))
             kernel_graph.get_node(source_id).type_ = "mem"
             if "reset" in graph.get_node(source).kernel:
                 kernel_graph.get_node(source_id).kernel = "reset"
         for dest in graph.get_tiles():
             if dest in compute_tiles:
                 dest_id = graph.get_node(dest).kernel
-                kernel_graph.add_node(KernelNode(kernel = dest_id))
+                kernel_graph.add_node(pnr_graph.KernelNode(kernel = dest_id))
                 kernel_graph.get_node(dest_id).latency = new_latencies[dest_id]
                 kernel_graph.get_node(dest_id).type_ = "compute"
             else:
                 dest_id = dest 
-                kernel_graph.add_node(KernelNode(mem_id = dest_id))
+                kernel_graph.add_node(pnr_graph.KernelNode(mem_id = dest_id))
                 kernel_graph.get_node(dest_id).type_ = "mem"
                 if "reset" in graph.get_node(dest).kernel:
                     kernel_graph.get_node(dest_id).kernel = "reset"
@@ -972,7 +971,7 @@ def load_id_to_name(id_filename):
     return id_to_name
      
 
-def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only):
+def pipeline_pnr(app_dir, placement, routing, id_to_name, load_only):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
