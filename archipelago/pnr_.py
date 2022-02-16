@@ -14,9 +14,10 @@ class PnRException(Exception):
         super(PnRException, self).__init__("Unable to PnR. Sorry! Please check the log")
 
 
-def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="", app_name="",
-        id_to_name=None, fixed_pos=None, max_num_col=None, compact=False,
-        copy_to_dir=None, max_frequency=None, shift_registers=False):
+def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
+        app_name="", id_to_name=None, fixed_pos=None, max_num_col=None,
+        compact=False, copy_to_dir=None, max_frequency=None,
+        shift_registers=False):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
@@ -92,17 +93,15 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="", app_n
 
     if not load_only:
         route(packed_file, placement_filename, graph_path, route_filename,
-          max_frequency, layout_filename, wave_info=wave_filename,
-          shift_registers=shift_registers)
+              max_frequency, layout_filename, wave_info=wave_filename,
+              shift_registers=shift_registers)
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
 
-
     # need to load it back up
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
-
 
     # tear down
     if use_temp:

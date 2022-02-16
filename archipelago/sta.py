@@ -14,8 +14,10 @@ SB_HORIZONTAL_DELAY = 140
 RMUX_DELAY = 0
 GLB_DELAY = 1100
 
+
 class PathComponents:
-    def __init__(self, glbs = 0, hhops = 0, uhops = 0, dhops = 0, pes = 0, mems = 0, used_regs = 0, available_regs = 0, parent = None):
+    def __init__(self, glbs=0, hhops=0, uhops=0, dhops=0, pes=0, mems=0,
+                 available_regs=0, parent=None):
         self.glbs = glbs
         self.hhops = hhops
         self.uhops = uhops
@@ -34,6 +36,7 @@ class PathComponents:
         total += self.pes * PE_DELAY
         total += self.mems * MEM_DELAY
         return total
+
 
 def sta(graph):
     nodes = graph.topological_sort()
@@ -61,7 +64,7 @@ def sta(graph):
                 comp.mems = timing_info[parent].mems
                 comp.available_regs = timing_info[parent].available_regs
                 comp.parent = parent
-            
+
             g_node = graph.get_node(node)
             if g_node.type_ == "tile":
                 if node[0] == 'p':
@@ -92,7 +95,7 @@ def sta(graph):
                     comp.available_regs = 0
                     comp.parent = None
             components.append(comp)
-        
+
         maxt = 0
         max_comp = components[0]
         for comp in components:
@@ -102,8 +105,10 @@ def sta(graph):
 
         timing_info[node] = max_comp
 
-    node_to_timing = {node:timing_info[node].get_total() for node in graph.nodes}
-    node_to_timing = dict(sorted(reversed(list(node_to_timing.items())), key=lambda item: item[1], reverse=True))
+    node_to_timing = {
+        node: timing_info[node].get_total() for node in graph.nodes}
+    node_to_timing = dict(sorted(reversed(
+        list(node_to_timing.items())), key=lambda item: item[1], reverse=True))
     max_node = list(node_to_timing.keys())[0]
     max_delay = list(node_to_timing.values())[0]
 
@@ -112,12 +117,18 @@ def sta(graph):
     print("\nCritical Path Info:")
     print("\tMaximum clock frequency:", clock_speed, "MHz")
     print("\tCritical Path:", max_delay, "ns")
-    print(f"\t{max_node}", "glb:", timing_info[max_node].glbs, "horiz hops:",  timing_info[max_node].hhops, "up hops:",  timing_info[max_node].uhops, "down hops:",  timing_info[max_node].dhops, "pes:", timing_info[max_node].pes, "mems:", timing_info[max_node].mems, "\n")
+    print(f"\t{max_node}", "glb:", timing_info[max_node].glbs,
+          "horiz hops:", timing_info[max_node].hhops,
+          "up hops:",  timing_info[max_node].uhops,
+          "down hops:",  timing_info[max_node].dhops,
+          "pes:", timing_info[max_node].pes,
+          "mems:", timing_info[max_node].mems, "\n")
+
 
 def load_id_to_name(packed_filename):
     f = open(packed_filename, "r")
     lines = f.readlines()
- 
+
     id_to_name = {}
     id_to_name_read = False
 
@@ -131,12 +142,14 @@ def load_id_to_name(packed_filename):
                 id = line.split(":")[0]
                 name = line.split(":")[1]
                 id_to_name[id] = name.strip()
-              
-    return id_to_name 
+
+    return id_to_name
+
 
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
-    parser.add_argument("-a", "--app", "-d", required=True, dest="application", type=str, help="Application directory")
+    parser.add_argument("-a", "--app", "-d", required=True,
+                        dest="application", type=str)
     args = parser.parse_args()
     dirname = os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
@@ -147,6 +160,7 @@ def parse_args():
     assert os.path.exists(route), route + " does not exists"
     return netlist, placement, route
 
+
 def main():
     packed_file, placement_file, routing_file = parse_args()
 
@@ -156,5 +170,6 @@ def main():
 
     graph = construct_graph(placement, routing, id_to_name)
     sta(graph)
-   
+
+
 main()

@@ -1,52 +1,67 @@
-import sys, os
+import sys
+import os
 from typing import Dict, List, Set
 
+
 class Node:
-    def __init__(self, type_, x, y, tile_id = None, route_type = None, track = None, side = None, io = None, bit_width = None, port = None, net_id = None, reg_name = None, rmux_name = None, reg = False, kernel = None):
-        assert x != None
-        assert y != None
+    def __init__(self, type_, x, y, tile_id=None, route_type=None, track=None,
+                 side=None, io=None, bit_width=None, port=None, net_id=None,
+                 reg_name=None, rmux_name=None, reg=False, kernel=None):
+        assert x is not None
+        assert y is not None
         if type_ == "tile":
-            assert tile_id != None
-            self.tile_id = tile_id 
+            assert tile_id is not None
+            self.tile_id = tile_id
         elif type_ == "route":
-            assert bit_width != None
-            self.tile_id = f"{type_ or 0},{route_type or 0},{x or 0},{y or 0},{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
-        assert self.tile_id != None
+            assert bit_width is not None
+            self.tile_id = f"{type_ or 0},{route_type or 0},{x or 0},{y or 0},\
+            {track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},\
+            {net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
+        assert self.tile_id is not None
         self.type_ = type_
         self.route_type = route_type
-        self.track = track 
-        self.x = x 
-        self.y = y 
-        self.side = side 
-        self.io = io 
-        self.bit_width = bit_width 
-        self.port = port 
+        self.track = track
+        self.x = x
+        self.y = y
+        self.side = side
+        self.io = io
+        self.bit_width = bit_width
+        self.port = port
         self.net_id = net_id
         self.reg_name = reg_name
         self.rmux_name = rmux_name
         self.reg = reg
         self.kernel = kernel
-    
+
     def update_tile_id(self):
         if self.type_ == "tile":
-            assert self.tile_id != None
-            self.tile_id = self.tile_id 
+            assert self.tile_id is not None
+            self.tile_id = self.tile_id
         elif self.type_ == "route":
-            assert self.bit_width != None
-            self.tile_id = f"{self.type_ or 0},{self.route_type or 0},{self.x or 0},{self.y or 0},{self.track or 0},{self.side or 0},{self.io or 0},{self.bit_width or 0},{self.port or 0},{self.net_id or 0},{self.reg_name or 0},{self.rmux_name or 0},{self.reg}"
-        assert self.tile_id != None
+            assert self.bit_width is not None
+            self.tile_id = f"{self.type_ or 0},{self.route_type or 0},\
+                             {self.x or 0},{self.y or 0},{self.track or 0},\
+                             {self.side or 0},{self.io or 0},\
+                             {self.bit_width or 0},{self.port or 0},\
+                             {self.net_id or 0},{self.reg_name or 0},\
+                             {self.rmux_name or 0},{self.reg}"
+        assert self.tile_id is not None
 
     def to_route(self):
         assert self.type_ == 'route'
 
         if self.route_type == "SB":
-            route_string = f"{self.route_type} ({self.track}, {self.x}, {self.y}, {self.side}, {self.io}, {self.bit_width})"
+            route_string = f"{self.route_type} ({self.track}, {self.x}, \
+                            {self.y}, {self.side}, {self.io}, {self.bit_width})"
         elif self.route_type == "PORT":
-            route_string = f"{self.route_type} ({self.port}, {self.x}, {self.y}, {self.bit_width})"
+            route_string = f"{self.route_type} ({self.port}, {self.x}, \
+                             {self.y}, {self.bit_width})"
         elif self.route_type == "REG":
-            route_string = f"{self.route_type} ({self.reg_name}, {self.track}, {self.x}, {self.y}, {self.bit_width})"
+            route_string = f"{self.route_type} ({self.reg_name}, {self.track}, \
+                             {self.x}, {self.y}, {self.bit_width})"
         elif self.route_type == "RMUX":
-            route_string = f"{self.route_type} ({self.rmux_name}, {self.x}, {self.y}, {self.bit_width})"
+            route_string = f"{self.route_type} ({self.rmux_name}, {self.x}, \
+                             {self.y}, {self.bit_width})"
         else:
             raise ValueError("Unrecognized route type")
         return route_string
@@ -55,13 +70,17 @@ class Node:
         assert self.type_ == 'route'
 
         if self.route_type == "SB":
-            route = [self.route_type, self.track, self.x, self.y, self.side, self.io, self.bit_width]
+            route = [self.route_type, self.track, self.x,
+                     self.y, self.side, self.io, self.bit_width]
         elif self.route_type == "PORT":
-            route = [self.route_type, self.port, self.x, self.y, self.bit_width]
+            route = [self.route_type, self.port,
+                     self.x, self.y, self.bit_width]
         elif self.route_type == "REG":
-            route = [self.route_type, self.reg_name, self.track, self.x, self.y, self.bit_width]
+            route = [self.route_type, self.reg_name,
+                     self.track, self.x, self.y, self.bit_width]
         elif self.route_type == "RMUX":
-            route = [self.route_type, self.rmux_name, self.x, self.y, self.bit_width]
+            route = [self.route_type, self.rmux_name,
+                     self.x, self.y, self.bit_width]
         else:
             raise ValueError("Unrecognized route type")
         return route
@@ -70,14 +89,16 @@ class Node:
         if self.type_ == "tile":
             return f"{self.tile_id} x:{self.x} y:{self.y} {self.kernel}"
         else:
-            return f"{self.route_type} x:{self.x} y:{self.y}\nt:{self.track} bw:{self.bit_width} n:{self.net_id}\np:{self.port} r:{self.reg} {self.kernel}"
+            return f"{self.route_type} x:{self.x} y:{self.y}\nt:{self.track} \
+                    bw:{self.bit_width} n:{self.net_id}\np:{self.port} r:{self.reg} {self.kernel}"
+
 
 class Graph:
     def __init__(self):
         self.nodes: Dict[str, Node] = {}
         self.edges: List[(str, str)] = []
         self.edge_weights: Dict[(str, str), int] = {}
-        self.inputs:List[str] = []
+        self.inputs: List[str] = []
         self.outputs: List[str] = []
         self.sources: Dict[str, List[str]] = {}
         self.sinks: Dict[str, List[str]] = {}
@@ -92,7 +113,7 @@ class Graph:
         self.regs = None
         self.shift_regs = None
         self.roms = None
-    
+
     def get_node(self, node: str):
         if node in self.nodes:
             return self.nodes[node]
@@ -128,7 +149,6 @@ class Graph:
                         mems.append(node)
             self.roms = mems
         return self.roms
-
 
     def get_regs(self):
         if not self.regs:
@@ -239,7 +259,7 @@ class Graph:
             g_node_2 = self.get_node(node2_name)
             g_node_1.update_tile_id()
             g_node_2.update_tile_id()
-            
+
             new_edges.append((g_node_1.tile_id, g_node_2.tile_id))
 
         self.nodes = new_nodes
@@ -251,7 +271,7 @@ class Graph:
             self.sources[node] = []
             self.sinks[node] = []
         for node in self.nodes:
-            for source,sink in self.edges:
+            for source, sink in self.edges:
                 if node == source:
                     self.sources[sink].append(source)
                 elif node == sink:
@@ -313,7 +333,7 @@ class Graph:
     def is_cyclic_util(self, v, visited, recStack):
         visited.append(v)
         recStack.append(v)
-  
+
         for neighbour in self.sinks[v]:
             if neighbour not in visited:
                 retval = self.isCyclicUtil(neighbour, visited, recStack)
@@ -324,15 +344,15 @@ class Graph:
 
         recStack.remove(v)
         return None
-  
+
     def fix_cycles(self):
         sys.setrecursionlimit(10**5)
         visited = []
         recStack = []
         for node in self.inputs:
             if node not in visited:
-                break_edge = self.isCyclicUtil(node,visited,recStack)
-                if break_edge != None:
+                break_edge = self.isCyclicUtil(node, visited, recStack)
+                if break_edge is not None:
                     print("Breaking cycle at", break_edge[1])
                     self.removeEdge(break_edge)
                     return True
@@ -402,7 +422,7 @@ class Graph:
 
 
 class KernelNode:
-    def __init__(self, mem_id = None, kernel = None, type_ = None, latency = 0, flush_latency = 0, has_shift_regs = False):
+    def __init__(self, mem_id=None, kernel=None, type_=None, latency=0, flush_latency=0, has_shift_regs=False):
         self.mem_id = mem_id
         self.kernel = kernel
         self.type_ = type_
@@ -416,11 +436,12 @@ class KernelNode:
         else:
             return f"{self.mem_id} {self.type_} {self.latency} {self.flush_latency}"
 
+
 class KernelGraph:
     def __init__(self):
         self.nodes: Dict[str, Node] = {}
         self.edges: List[(str, str)] = []
-        self.inputs:List[str] = []
+        self.inputs: List[str] = []
         self.outputs: List[str] = []
         self.sources: Dict[str, List[str]] = {}
         self.sinks: Dict[str, List[str]] = {}
@@ -448,7 +469,6 @@ class KernelGraph:
                     queue.append(node)
                     visited.add(node)
         return False
-
 
     def add_node(self, node: KernelNode):
         if node.kernel:
@@ -489,7 +509,7 @@ class KernelGraph:
             self.sources[node] = []
             self.sinks[node] = []
         for node in self.nodes:
-            for source,sink in self.edges:
+            for source, sink in self.edges:
                 if node == source:
                     self.sources[sink].append(source)
                 elif node == sink:
@@ -515,28 +535,34 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
+
 def segment_to_node(segment, net_id):
     if segment[0] == "SB":
         track, x, y, side, io_, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "SB", track = track, side = side, io = io_, bit_width = bit_width, net_id = net_id)
+        node1 = Node("route", x, y, route_type="SB", track=track,
+                     side=side, io=io_, bit_width=bit_width, net_id=net_id)
     elif segment[0] == "PORT":
         port_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "PORT", bit_width = bit_width, net_id = net_id, port = port_name)
+        node1 = Node("route", x, y, route_type="PORT",
+                     bit_width=bit_width, net_id=net_id, port=port_name)
     elif segment[0] == "REG":
         reg_name, track, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "REG", track = track, bit_width = bit_width, net_id = net_id, reg_name = reg_name)
+        node1 = Node("route", x, y, route_type="REG", track=track,
+                     bit_width=bit_width, net_id=net_id, reg_name=reg_name)
     elif segment[0] == "RMUX":
         rmux_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "RMUX", bit_width = bit_width, net_id = net_id, rmux_name = rmux_name)
+        node1 = Node("route", x, y, route_type="RMUX",
+                     bit_width=bit_width, net_id=net_id, rmux_name=rmux_name)
     else:
         raise ValueError("Unrecognized route type")
     return node1
 
-def get_tile_at(x, y, bw, placement, port = "", reg = False):
+
+def get_tile_at(x, y, bw, placement, port="", reg=False):
     pond_ports = ["data_in_pond_0", "data_out_pond_0", "flush"]
 
     for tile_id, place in placement.items():
-        if (x,y) == place:
+        if (x, y) == place:
             if reg:
                 if tile_id[0] == 'r':
                     return tile_id
@@ -554,11 +580,12 @@ def get_tile_at(x, y, bw, placement, port = "", reg = False):
                 if port in pond_ports:
                     if tile_id[0] == "M":
                         return tile_id
-                else:         
-                    if tile_id[0] != "M":             
-                        return tile_id      
+                else:
+                    if tile_id[0] != "M":
+                        return tile_id
 
     return None
+
 
 def construct_graph(placement, routes, id_to_name):
     graph = Graph()
@@ -570,7 +597,7 @@ def construct_graph(placement, routes, id_to_name):
             kernel = graph.id_to_name[blk_id].split("$")[0]
         else:
             kernel = None
-        node = Node("tile", place[0], place[1], tile_id=blk_id, kernel = kernel)
+        node = Node("tile", place[0], place[1], tile_id=blk_id, kernel=kernel)
         graph.add_node(node)
         max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
@@ -584,25 +611,28 @@ def construct_graph(placement, routes, id_to_name):
                 node2 = segment_to_node(seg2, net_id)
                 graph.add_node(node2)
                 graph.add_edge(node1, node2)
-                
+
                 if node1.route_type == "PORT":
-                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, node1.port)
+                    tile_id = get_tile_at(
+                        node1.x, node1.y, node1.bit_width, placement, node1.port)
                     graph.add_edge(tile_id, node1)
                 elif node1.route_type == "REG":
-                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, reg = True)
+                    tile_id = get_tile_at(
+                        node1.x, node1.y, node1.bit_width, placement, reg=True)
                     graph.add_edge(tile_id, node1)
 
                 if node2.route_type == "PORT":
-                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, node2.port)
-                    if tile_id[0] == "m" and not "chain" in node2.port:
-                         node2.reg = True
+                    tile_id = get_tile_at(
+                        node2.x, node2.y, node2.bit_width, placement, node2.port)
+                    if tile_id[0] == "m" and "chain" not in node2.port:
+                        node2.reg = True
                     graph.add_edge(node2, tile_id)
                 elif node2.route_type == "REG":
-                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, reg = True)
+                    tile_id = get_tile_at(
+                        node2.x, node2.y, node2.bit_width, placement, reg=True)
                     node2.reg = True
                     graph.add_edge(node2, tile_id)
 
-    
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
     if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
