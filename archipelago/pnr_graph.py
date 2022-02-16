@@ -1,13 +1,5 @@
-import sys
-import os
-import argparse
-import re
-import itertools
-import glob
-import json
-from graphviz import Digraph
-from typing import Dict, List, NoReturn, Tuple, Set
-
+import sys, os
+from typing import Dict, List, Set
 
 class Node:
     def __init__(self, type_, x, y, tile_id = None, route_type = None, track = None, side = None, io = None, bit_width = None, port = None, net_id = None, reg_name = None, rmux_name = None, reg = False, kernel = None):
@@ -292,63 +284,6 @@ class Graph:
             for source in self.sources[tile]:
                 self.get_node(source).kernel = self.get_node(tile).kernel
 
-
-    def print_graph(self, filename, edge_weights = False):
-        g = Digraph()
-        for node in self.nodes:
-            g.node(node, label = self.get_node(node).to_string())
-
-        for edge in self.edges:
-            if self.get_node(edge[0]).net_id != None:
-                net_id = self.get_node(edge[0]).net_id
-            else:
-                net_id = self.get_node(edge[1]).net_id
-
-            if edge_weights:
-                g.edge(edge[0], edge[1], label=str(self.edge_weights[edge]))
-            else:
-                g.edge(edge[0], edge[1], label=net_id)
-            
-        g.render(filename=filename)
-
-    def print_graph_tiles_only(self, filename):
-        g = Digraph()
-        for source in self.get_tiles():
-            if source[0] == 'r':
-                g.node(source, label = f"{source}\n{self.get_node(source).kernel}", shape='box')
-            else:
-                g.node(source, label = f"{source}\n{self.get_node(source).kernel}")
-            for dest in self.get_tiles():
-                reachable = False
-                visited = set()
-                queue = []
-                queue.append(source)
-                visited.add(source)
-                while queue:
-                    n = queue.pop()
-
-                    if n == dest and n != source:
-                        reachable = True
-
-                    for node in self.sinks[n]:
-                        if node not in visited:
-                            if self.get_node(node).type_ == "tile":
-                                if node == dest:
-                                    reachable = True
-                            else:
-                                queue.append(node)
-                                visited.add(node)
-
-                if reachable:
-                    if self.get_node(source).net_id != None:
-                        net_id = self.get_node(source).net_id
-                    else:
-                        net_id = self.get_node(dest).net_id
-                    g.edge(source, dest, label=net_id)
-            
-        g.render(filename=filename)
-
-
     def topological_sort(self):
         visited = set()
         stack: List[str] = []
@@ -364,7 +299,7 @@ class Graph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
-    def removeEdge(self, edge):
+    def remove_edge(self, edge):
         node0 = edge[0]
         node1 = edge[1]
 
@@ -375,7 +310,7 @@ class Graph:
         if node1 in self.sinks[node0]:
             self.sinks[node0].remove(node1)
 
-    def isCyclicUtil(self, v, visited, recStack):
+    def is_cyclic_util(self, v, visited, recStack):
         visited.append(v)
         recStack.append(v)
   
@@ -390,7 +325,7 @@ class Graph:
         recStack.remove(v)
         return None
   
-    def FixCycles(self):
+    def fix_cycles(self):
         sys.setrecursionlimit(10**5)
         visited = []
         recStack = []
@@ -580,13 +515,109 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
-    def print_graph(self, filename):
-        g = Digraph()
-        for node in self.nodes:
-            g.node(node, label = self.get_node(node).to_string())
+def segment_to_node(segment, net_id):
+    if segment[0] == "SB":
+        track, x, y, side, io_, bit_width = segment[1:]
+        node1 = Node("route", x, y, route_type = "SB", track = track, side = side, io = io_, bit_width = bit_width, net_id = net_id)
+    elif segment[0] == "PORT":
+        port_name, x, y, bit_width = segment[1:]
+        node1 = Node("route", x, y, route_type = "PORT", bit_width = bit_width, net_id = net_id, port = port_name)
+    elif segment[0] == "REG":
+        reg_name, track, x, y, bit_width = segment[1:]
+        node1 = Node("route", x, y, route_type = "REG", track = track, bit_width = bit_width, net_id = net_id, reg_name = reg_name)
+    elif segment[0] == "RMUX":
+        rmux_name, x, y, bit_width = segment[1:]
+        node1 = Node("route", x, y, route_type = "RMUX", bit_width = bit_width, net_id = net_id, rmux_name = rmux_name)
+    else:
+        raise ValueError("Unrecognized route type")
+    return node1
 
-        for edge in self.edges:
-            g.edge(edge[0], edge[1])
-            
-        g.render(filename=filename)
+def get_tile_at(x, y, bw, placement, port = "", reg = False):
+    pond_ports = ["data_in_pond_0", "data_out_pond_0", "flush"]
 
+    for tile_id, place in placement.items():
+        if (x,y) == place:
+            if reg:
+                if tile_id[0] == 'r':
+                    return tile_id
+            elif y == 0:
+                assert tile_id[0] == "I" or tile_id[0] == "i"
+                if tile_id[0] == "I" and bw == 16:
+                    return tile_id
+                elif tile_id[0] == "i" and bw == 1:
+                    return tile_id
+            elif (x+1) % 4 == 0:
+                assert tile_id[0] == "m"
+                return tile_id
+            else:
+                assert tile_id[0] == "M" or tile_id[0] == "p", tile_id
+                if port in pond_ports:
+                    if tile_id[0] == "M":
+                        return tile_id
+                else:         
+                    if tile_id[0] != "M":             
+                        return tile_id      
+
+    return None
+
+def construct_graph(placement, routes, id_to_name):
+    graph = Graph()
+    graph.id_to_name = id_to_name
+    max_reg_id = 0
+
+    for blk_id, place in placement.items():
+        if len(graph.id_to_name[blk_id].split("$")) > 0:
+            kernel = graph.id_to_name[blk_id].split("$")[0]
+        else:
+            kernel = None
+        node = Node("tile", place[0], place[1], tile_id=blk_id, kernel = kernel)
+        graph.add_node(node)
+        max_reg_id = max(max_reg_id, int(blk_id[1:]))
+    graph.added_regs = max_reg_id + 1
+
+    for net_id, net in routes.items():
+
+        for route in net:
+            for seg1, seg2 in zip(route, route[1:]):
+                node1 = segment_to_node(seg1, net_id)
+                graph.add_node(node1)
+                node2 = segment_to_node(seg2, net_id)
+                graph.add_node(node2)
+                graph.add_edge(node1, node2)
+                
+                if node1.route_type == "PORT":
+                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, node1.port)
+                    graph.add_edge(tile_id, node1)
+                elif node1.route_type == "REG":
+                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, reg = True)
+                    graph.add_edge(tile_id, node1)
+
+                if node2.route_type == "PORT":
+                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, node2.port)
+                    if tile_id[0] == "m" and not "chain" in node2.port:
+                         node2.reg = True
+                    graph.add_edge(node2, tile_id)
+                elif node2.route_type == "REG":
+                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, reg = True)
+                    node2.reg = True
+                    graph.add_edge(node2, tile_id)
+
+    
+    graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
+    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+        for pe in graph.get_ponds()+graph.get_pes():
+            sources = graph.sources[pe]
+            for source in sources:
+                graph.get_node(source).reg = True
+
+    graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
+
+    for node in graph.nodes:
+        if graph.get_node(node).reg:
+            graph.node_latencies[node] = 1
+        else:
+            graph.node_latencies[node] = 0
+
+    return graph

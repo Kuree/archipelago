@@ -14,6 +14,5 @@ setup(
     install_requires=[
         "pythunder",
         "pycyclone",
-        "pillow",
     ],
 )
