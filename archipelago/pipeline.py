@@ -986,7 +986,9 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, load_only):
     graph = construct_graph(placement, routing, id_to_name)
 
     verify_graph(graph)
-    max_itr = None 
+
+    max_itr = 0 
+    
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)

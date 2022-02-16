@@ -36,9 +36,5 @@ def main():
     app_dir = os.path.dirname(netlist_file)
 
     sta_analysis(app_dir, placement, routing, id_to_name)
-
-    
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-    main()
-
+   
+main()
