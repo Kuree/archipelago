@@ -89,7 +89,7 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="", app_n
         wave_filename = os.path.join(cwd, app_name + ".wave")
     else:
         wave_filename = None
-    
+
     if not load_only:
         route(packed_file, placement_filename, graph_path, route_filename,
           max_frequency, layout_filename, wave_info=wave_filename,

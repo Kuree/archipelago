@@ -2,7 +2,7 @@ import os
 import argparse
 import sys
 from pycyclone.io import load_placement
-from pythunder.io import load_netlist
+import pythunder
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import construct_graph
 
@@ -114,6 +114,25 @@ def sta(graph):
     print("\tCritical Path:", max_delay, "ns")
     print(f"\t{max_node}", "glb:", timing_info[max_node].glbs, "horiz hops:",  timing_info[max_node].hhops, "up hops:",  timing_info[max_node].uhops, "down hops:",  timing_info[max_node].dhops, "pes:", timing_info[max_node].pes, "mems:", timing_info[max_node].mems, "\n")
 
+def load_id_to_name(packed_filename):
+    f = open(packed_filename, "r")
+    lines = f.readlines()
+ 
+    id_to_name = {}
+    id_to_name_read = False
+
+    for line in lines:
+        if "ID to Names:" in line:
+            id_to_name_read = True
+        elif "Netlist Bus:" in line:
+            id_to_name_read = False
+        elif id_to_name_read:
+            if len(line.split(":")) > 1:
+                id = line.split(":")[0]
+                name = line.split(":")[1]
+                id_to_name[id] = name.strip()
+              
+    return id_to_name 
 
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
@@ -129,13 +148,10 @@ def parse_args():
     return netlist, placement, route
 
 def main():
-    netlist_file, placement_file, routing_file = parse_args()
+    packed_file, placement_file, routing_file = parse_args()
 
-    print("Loading netlist")
-    _, id_to_name = load_netlist(netlist_file)
-    print("Loading placement")
+    id_to_name = load_id_to_name(packed_file)
     placement = load_placement(placement_file)
-    print("Loading routing")
     routing = load_routing_result(routing_file)
 
     graph = construct_graph(placement, routing, id_to_name)

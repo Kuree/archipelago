@@ -66,7 +66,7 @@ class Node:
             raise ValueError("Unrecognized route type")
         return route
 
-    def to_string(self):
+    def __repr__(self):
         if self.type_ == "tile":
             return f"{self.tile_id} x:{self.x} y:{self.y} {self.kernel}"
         else:
@@ -410,7 +410,7 @@ class KernelNode:
         self.flush_latency = flush_latency
         self.has_shift_regs = has_shift_regs
 
-    def to_string(self):
+    def __repr__(self):
         if self.kernel:
             return f"{self.kernel} {self.type_} {self.latency} {self.flush_latency}"
         else:
