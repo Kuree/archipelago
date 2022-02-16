@@ -15,8 +15,8 @@ class Node:
         elif type_ == "route":
             assert bit_width is not None
             self.tile_id = f"{type_ or 0},{route_type or 0},{x or 0},{y or 0},"+\
-            "{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},"+\
-            "{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
+            f"{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},"+\
+            f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
         assert self.tile_id is not None
         self.type_ = type_
         self.route_type = route_type
@@ -40,11 +40,11 @@ class Node:
         elif self.type_ == "route":
             assert self.bit_width is not None
             self.tile_id = f"{self.type_ or 0},{self.route_type or 0},"+\
-                             "{self.x or 0},{self.y or 0},{self.track or 0},"+\
-                             "{self.side or 0},{self.io or 0},"+\
-                             "{self.bit_width or 0},{self.port or 0},"+\
-                             "{self.net_id or 0},{self.reg_name or 0},"+\
-                             "{self.rmux_name or 0},{self.reg}"
+                           f"{self.x or 0},{self.y or 0},{self.track or 0},"+\
+                           f"{self.side or 0},{self.io or 0},"+\
+                           f"{self.bit_width or 0},{self.port or 0},"+\
+                           f"{self.net_id or 0},{self.reg_name or 0},"+\
+                           f"{self.rmux_name or 0},{self.reg}"
         assert self.tile_id is not None
 
     def to_route(self):
@@ -52,16 +52,16 @@ class Node:
 
         if self.route_type == "SB":
             route_string = f"{self.route_type} ({self.track}, {self.x}, "+\
-                            "{self.y}, {self.side}, {self.io}, {self.bit_width})"
+                           f"{self.y}, {self.side}, {self.io}, {self.bit_width})"
         elif self.route_type == "PORT":
             route_string = f"{self.route_type} ({self.port}, {self.x}, "+\
-                             "{self.y}, {self.bit_width})"
+                           f"{self.y}, {self.bit_width})"
         elif self.route_type == "REG":
             route_string = f"{self.route_type} ({self.reg_name}, {self.track}, "+\
-                             "{self.x}, {self.y}, {self.bit_width})"
+                           f"{self.x}, {self.y}, {self.bit_width})"
         elif self.route_type == "RMUX":
             route_string = f"{self.route_type} ({self.rmux_name}, {self.x}, "+\
-                             "{self.y}, {self.bit_width})"
+                           f"{self.y}, {self.bit_width})"
         else:
             raise ValueError("Unrecognized route type")
         return route_string
@@ -85,12 +85,12 @@ class Node:
             raise ValueError("Unrecognized route type")
         return route
 
-    def __repr__(self):
+    def to_string(self):
         if self.type_ == "tile":
             return f"{self.tile_id} x:{self.x} y:{self.y} {self.kernel}"
         else:
             return f"{self.route_type} x:{self.x} y:{self.y}\nt:{self.track} "+\
-                    "bw:{self.bit_width} n:{self.net_id}\np:{self.port} r:{self.reg} {self.kernel}"
+                   f"bw:{self.bit_width} n:{self.net_id}\np:{self.port} r:{self.reg} {self.kernel}"
 
 
 class Graph:
@@ -430,7 +430,7 @@ class KernelNode:
         self.flush_latency = flush_latency
         self.has_shift_regs = has_shift_regs
 
-    def __repr__(self):
+    def to_string(self):
         if self.kernel:
             return f"{self.kernel} {self.type_} {self.latency} {self.flush_latency}"
         else:
