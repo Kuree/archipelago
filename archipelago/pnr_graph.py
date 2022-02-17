@@ -163,7 +163,8 @@ class Graph:
         if not self.shift_regs:
             regs = []
             for node in self.nodes:
-                if self.get_node(node).type_ == "tile" and self.get_node(node).tile_id[0] == 'r' and "d_reg_" in self.id_to_name[node]:
+                if self.get_node(node).type_ == "tile" and self.get_node(node).tile_id[0] == 'r' \
+                   and "d_reg_" in self.id_to_name[node]:
                     regs.append(node)
             self.shift_regs = regs
         return self.shift_regs
@@ -190,7 +191,8 @@ class Graph:
         if not self.input_ios:
             ios = []
             for node in self.nodes:
-                if self.get_node(node).type_ == "tile" and (self.get_node(node).tile_id[0] == 'I' or self.get_node(node).tile_id[0] == 'i') and len(self.sources[node]) == 0:
+                if self.get_node(node).type_ == "tile" and (self.get_node(node).tile_id[0] == 'I' \
+                   or self.get_node(node).tile_id[0] == 'i') and len(self.sources[node]) == 0:
                     ios.append(node)
             self.input_ios = ios
         return self.input_ios
@@ -199,7 +201,8 @@ class Graph:
         if not self.output_ios:
             ios = []
             for node in self.nodes:
-                if self.get_node(node).type_ == "tile" and (self.get_node(node).tile_id[0] == 'I' or self.get_node(node).tile_id[0] == 'i') and len(self.sinks[node]) == 0:
+                if self.get_node(node).type_ == "tile" and (self.get_node(node).tile_id[0] == 'I' \
+                   or self.get_node(node).tile_id[0] == 'i') and len(self.sinks[node]) == 0:
                     ios.append(node)
             self.output_ios = ios
         return self.output_ios
@@ -330,31 +333,30 @@ class Graph:
         if node1 in self.sinks[node0]:
             self.sinks[node0].remove(node1)
 
-    def is_cyclic_util(self, v, visited, recStack):
+    def is_cyclic_util(self, v, visited, rec_stack):
         visited.append(v)
-        recStack.append(v)
+        rec_stack.append(v)
 
         for neighbour in self.sinks[v]:
             if neighbour not in visited:
-                retval = self.isCyclicUtil(neighbour, visited, recStack)
+                retval = self.is_cyclic_util(neighbour, visited, rec_stack)
                 if retval != None:
                     return retval
-            elif neighbour in recStack:
+            elif neighbour in rec_stack:
                 return (v, neighbour)
 
-        recStack.remove(v)
+        rec_stack.remove(v)
         return None
 
     def fix_cycles(self):
         sys.setrecursionlimit(10**5)
         visited = []
-        recStack = []
+        rec_stack = []
         for node in self.inputs:
             if node not in visited:
-                break_edge = self.isCyclicUtil(node, visited, recStack)
+                break_edge = self.is_cyclic_util(node, visited, rec_stack)
                 if break_edge is not None:
-                    print("Breaking cycle at", break_edge[1])
-                    self.removeEdge(break_edge)
+                    self.remove_edge(break_edge)
                     return True
         return False
 

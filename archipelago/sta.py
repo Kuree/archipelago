@@ -1,18 +1,11 @@
 import os
+import json
 import argparse
 import sys
 from pycyclone.io import load_placement
 import pythunder
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import construct_graph
-
-PE_DELAY = 700
-MEM_DELAY = 800
-SB_UP_DELAY = 90
-SB_DOWN_DELAY = 190
-SB_HORIZONTAL_DELAY = 140
-RMUX_DELAY = 0
-GLB_DELAY = 1100
 
 
 class PathComponents:
@@ -26,15 +19,16 @@ class PathComponents:
         self.mems = mems
         self.available_regs = available_regs
         self.parent = parent
-
+        self.delays = json.load(open(os.path.dirname(os.path.realpath(__file__)) + "/sta_delays.json"))
+        
     def get_total(self):
         total = 0
-        total += self.glbs * GLB_DELAY
-        total += self.hhops * SB_HORIZONTAL_DELAY
-        total += self.uhops * SB_UP_DELAY
-        total += self.dhops * SB_DOWN_DELAY
-        total += self.pes * PE_DELAY
-        total += self.mems * MEM_DELAY
+        total += self.glbs * self.delays['glb']
+        total += self.hhops * self.delays['sb_horiz']
+        total += self.uhops * self.delays['sb_up']
+        total += self.dhops * self.delays['sb_down']
+        total += self.pes * self.delays['pe']
+        total += self.mems * self.delays['mem']
         return total
 
 
@@ -169,7 +163,12 @@ def main():
     routing = load_routing_result(routing_file)
 
     graph = construct_graph(placement, routing, id_to_name)
+    
+    while graph.fix_cycles():
+        pass
+
     sta(graph)
 
 
-main()
+if __name__ == "__main__":
+    main()
