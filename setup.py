@@ -15,4 +15,7 @@ setup(
         "pythunder",
         "pycyclone",
     ],
+    data_files=[
+        ('sta_delays', ['archipelago/sta_delays.json']),
+    ]
 )

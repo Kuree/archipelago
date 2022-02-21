@@ -119,27 +119,6 @@ def sta(graph):
           "mems:", timing_info[max_node].mems, "\n")
 
 
-def load_id_to_name(packed_filename):
-    f = open(packed_filename, "r")
-    lines = f.readlines()
-
-    id_to_name = {}
-    id_to_name_read = False
-
-    for line in lines:
-        if "ID to Names:" in line:
-            id_to_name_read = True
-        elif "Netlist Bus:" in line:
-            id_to_name_read = False
-        elif id_to_name_read:
-            if len(line.split(":")) > 1:
-                id = line.split(":")[0]
-                name = line.split(":")[1]
-                id_to_name[id] = name.strip()
-
-    return id_to_name
-
-
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
     parser.add_argument("-a", "--app", "-d", required=True,
@@ -158,7 +137,7 @@ def parse_args():
 def main():
     packed_file, placement_file, routing_file = parse_args()
 
-    id_to_name = load_id_to_name(packed_file)
+    id_to_name = pythunder.io.load_id_to_name(packed_file)
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
