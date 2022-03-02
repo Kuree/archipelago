@@ -248,6 +248,36 @@ class RoutingResultGraph:
                     ios.append(node)
             self.output_ios = ios
         return self.output_ios
+    
+    def get_outputs_of_kernel(self, kernel):
+        kernel_nodes = set()
+        for node in self.nodes:
+            if node.kernel == kernel:
+                kernel_nodes.add(node)
+
+        kernel_output_nodes = set()
+
+        for source in kernel_nodes:
+            visited = set()
+            queue = []
+
+            queue.append(source)
+            visited.add(source)
+
+            while queue:
+                n = queue.pop()
+
+                if n.kernel != kernel:
+                    kernel_output_nodes.add(source)
+                    break
+                elif n != source:
+                    continue
+
+                for node in self.sinks[n]:
+                    if node not in visited:
+                        queue.append(node)
+                        visited.add(node)
+        return kernel_output_nodes
 
     def is_reachable(self, source, dest):
         visited = set()

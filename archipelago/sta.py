@@ -117,6 +117,23 @@ def sta(graph):
           "mems:", timing_info[max_node].mems, "\n")
 
 
+    curr_node = max_node
+    crit_path = []
+    crit_path.append((curr_node, timing_info[curr_node].get_total()))
+    crit_edges = []
+    while(True):
+        if (timing_info[curr_node].parent, curr_node) in graph.edges:
+            crit_edges.append((timing_info[curr_node].parent, curr_node))
+        curr_node = timing_info[curr_node].parent
+        crit_path.append((curr_node, timing_info[curr_node].get_total()))
+        if timing_info[curr_node].parent is None:
+            break
+
+    crit_path.reverse()
+
+    return clock_speed, crit_path, crit_edges
+
+
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
     parser.add_argument("-a", "--app", "-d", required=True,
