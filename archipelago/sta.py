@@ -5,7 +5,7 @@ import sys
 from pycyclone.io import load_placement
 import pythunder
 from archipelago.io import load_routing_result
-from archipelago.pnr_graph import construct_graph
+from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
 
 
 class PathComponents:
@@ -40,13 +40,12 @@ def sta(graph):
         comp = PathComponents()
         components = [comp]
 
-        if len(graph.sources[node]) == 0:
+        if len(graph.sources[node]) == 0 and (node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1):
             comp = PathComponents()
             comp.glbs = 1
-            components.append(comp)
+            components = [comp]
 
         for parent in graph.sources[node]:
-
             comp = PathComponents()
 
             if parent in timing_info:
@@ -59,35 +58,35 @@ def sta(graph):
                 comp.available_regs = timing_info[parent].available_regs
                 comp.parent = parent
 
-            g_node = graph.get_node(node)
-            if g_node.type_ == "tile":
-                if node[0] == 'p':
+            if isinstance(node, TileNode):
+                if node.tile_type == TileType.PE:
                     comp.pes += 1
-                elif node[0] == 'm':
+                elif node.tile_type == TileType.MEM:
                     comp.mems += 1
-                elif node[0] == 'I' or node[0] == 'i':
+                elif node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1:
                     comp.glbs += 1
+
+                if parent.route_type == RouteType.PORT:
+                    if node.input_port_break_path[parent.port]:
+                        comp = PathComponents()
+                elif parent.route_type == RouteType.REG:
+                    if node.input_port_break_path["reg"]:
+                        comp = PathComponents()
+                else:
+                    raise ValueError("Parent of tile should be a port")
             else:
-                if g_node.route_type == "SB":
-                    if g_node.io == 1:
-                        if g_node.side == 3:
+                if node.route_type == RouteType.SB:
+                    if node.io == 1:
+                        if node.side == 3:
                             comp.uhops += 1
-                        elif g_node.side == 1:
+                        elif node.side == 1:
                             comp.dhops += 1
                         else:
                             comp.hhops += 1
-                elif g_node.route_type == "RMUX":
-                    if graph.get_node(parent).route_type != "REG":
+                elif node.route_type == RouteType.RMUX:
+                    if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
-                if graph.node_latencies[node] != 0:
-                    comp.glbs = 0
-                    comp.hhops = 0
-                    comp.uhops = 0
-                    comp.dhops = 0
-                    comp.pes = 0
-                    comp.mems = 0
-                    comp.available_regs = 0
-                    comp.parent = None
+
             components.append(comp)
 
         maxt = 0
@@ -99,8 +98,7 @@ def sta(graph):
 
         timing_info[node] = max_comp
 
-    node_to_timing = {
-        node: timing_info[node].get_total() for node in graph.nodes}
+    node_to_timing = {node: timing_info[node].get_total() for node in graph.nodes}
     node_to_timing = dict(sorted(reversed(
         list(node_to_timing.items())), key=lambda item: item[1], reverse=True))
     max_node = list(node_to_timing.keys())[0]
@@ -138,15 +136,13 @@ def main():
     packed_file, placement_file, routing_file = parse_args()
 
     id_to_name = pythunder.io.load_id_to_name(packed_file)
+    netlist, buses = pythunder.io.load_netlist(packed_file)
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    graph = construct_graph(placement, routing, id_to_name)
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
     
-    while graph.fix_cycles():
-        pass
-
-    sta(graph)
+    sta(routing_result_graph)
 
 
 if __name__ == "__main__":

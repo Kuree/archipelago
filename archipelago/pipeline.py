@@ -12,7 +12,6 @@ from pycyclone.io import load_placement
 # parse raw routing result
 from canal.pnr_io import __parse_raw_routing_result
 from typing import Dict, List, NoReturn, Tuple, Set
-from .new_visualizer import visualize_pnr
 from .pnr_graph import Node, Graph, KernelNode, KernelGraph
 
 def parse_args():
@@ -28,226 +27,8 @@ def parse_args():
     assert os.path.exists(route), route + " does not exists"
     return netlist, placement, route, args.frequency
 
-def load_netlist(netlist_file):
-    f = open(netlist_file, "r")
-    lines = f.readlines()
- 
-    netlist = {}
-    id_to_name = {}
-    netlist_read = False
-    id_to_name_read = False
-
-    for line in lines:
-        if "Netlists:" in line:
-            netlist_read = True
-        elif "ID to Names:" in line:
-            netlist_read = False
-            id_to_name_read = True
-        elif "Netlist Bus:" in line:
-            netlist_read = False
-            id_to_name_read = False
-        elif netlist_read:
-            if len(line.split(":")) > 1:
-                edge_id = line.split(":")[0]
-                connections = line.split(":")[1]
-
-                connections = re.findall(r'\b\S+\b', connections)
-
-                netlist[edge_id] = []
-                for conn1, conn2 in zip(connections[::2], connections[1::2]):
-                    netlist[edge_id].append((conn1, conn2))
-        elif id_to_name_read:
-            if len(line.split(":")) > 1:
-                id = line.split(":")[0]
-                name = line.split(":")[1]
-                id_to_name[id] = name.strip()
-              
-    return netlist, id_to_name
-
-def load_folded_regs(folded_file):
-    f = open(folded_file, "r")
-    lines = f.readlines()
-    pe_reg = set()
- 
-    for line in lines:
-        reg_entry = re.findall(r'\b\S+\b', line.split(":")[0])
-        entry = re.findall(r'\b\S+\b', line.split(":")[1])
-        blk_id = entry[0]
-        port = entry[-1]
-        if reg_entry[0][0] == 'r' and blk_id[0] == 'p':
-            pe_reg.add(((reg_entry[0], reg_entry[1]),(blk_id, port)))
-
-    return pe_reg
-
-def load_shift_regs(shift_regs_file, pe_reg):
-    shift_regs = set()
-    folded_regs = {reg:pe for (reg,_),pe in pe_reg}
-
-    f = open(shift_regs_file, "r")
-    lines = f.readlines()
-    pe_reg = set()
- 
-    for line in lines:
-        id = line.strip()
-        shift_regs.add((id, None))
-        if id in folded_regs:
-            shift_regs.add(folded_regs[id])        
-    return shift_regs
-
-def segment_to_node(segment, net_id):
-    if segment[0] == "SB":
-        track, x, y, side, io_, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "SB", track = track, side = side, io = io_, bit_width = bit_width, net_id = net_id)
-    elif segment[0] == "PORT":
-        port_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "PORT", bit_width = bit_width, net_id = net_id, port = port_name)
-    elif segment[0] == "REG":
-        reg_name, track, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "REG", track = track, bit_width = bit_width, net_id = net_id, reg_name = reg_name)
-    elif segment[0] == "RMUX":
-        rmux_name, x, y, bit_width = segment[1:]
-        node1 = Node("route", x, y, route_type = "RMUX", bit_width = bit_width, net_id = net_id, rmux_name = rmux_name)
-    else:
-        raise ValueError("Unrecognized route type")
-    return node1
-
-def get_tile_at(x, y, bw, placement, port = "", reg = False):
-    pond_ports = ["data_in_pond_0", "data_out_pond_0", "flush"]
-
-    for tile_id, place in placement.items():
-        if (x,y) == place:
-            if reg:
-                if tile_id[0] == 'r':
-                    return tile_id
-            elif y == 0:
-                assert tile_id[0] == "I" or tile_id[0] == "i"
-                if tile_id[0] == "I" and bw == 16:
-                    return tile_id
-                elif tile_id[0] == "i" and bw == 1:
-                    return tile_id
-            elif (x+1) % 4 == 0:
-                assert tile_id[0] == "m"
-                return tile_id
-            else:
-                assert tile_id[0] == "M" or tile_id[0] == "p", tile_id
-                if port in pond_ports:
-                    if tile_id[0] == "M":
-                        return tile_id
-                else:         
-                    if tile_id[0] != "M":             
-                        return tile_id      
-
-    return None
 
 
-def construct_graph(placement, routes, id_to_name):
-    graph = Graph()
-    graph.id_to_name = id_to_name
-    max_reg_id = 0
-
-    for blk_id, place in placement.items():
-        if len(graph.id_to_name[blk_id].split("$")) > 0:
-            kernel = graph.id_to_name[blk_id].split("$")[0]
-        else:
-            kernel = None
-        node = Node("tile", place[0], place[1], tile_id=blk_id, kernel = kernel)
-        graph.add_node(node)
-        max_reg_id = max(max_reg_id, int(blk_id[1:]))
-    graph.added_regs = max_reg_id + 1
-
-    for net_id, net in routes.items():
-
-        for route in net:
-            for seg1, seg2 in zip(route, route[1:]):
-                node1 = segment_to_node(seg1, net_id)
-                graph.add_node(node1)
-                node2 = segment_to_node(seg2, net_id)
-                graph.add_node(node2)
-                graph.add_edge(node1, node2)
-                
-                if node1.route_type == "PORT":
-                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, node1.port)
-                    graph.add_edge(tile_id, node1)
-                elif node1.route_type == "REG":
-                    tile_id = get_tile_at(node1.x, node1.y, node1.bit_width, placement, reg = True)
-                    graph.add_edge(tile_id, node1)
-
-                if node2.route_type == "PORT":
-                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, node2.port)
-                    if tile_id[0] == "m" and not "chain" in node2.port:
-                         node2.reg = True
-                    graph.add_edge(node2, tile_id)
-                elif node2.route_type == "REG":
-                    tile_id = get_tile_at(node2.x, node2.y, node2.bit_width, placement, reg = True)
-                    node2.reg = True
-                    graph.add_edge(node2, tile_id)
-
-    
-    graph.update_sources_and_sinks()
-    graph.update_edge_kernels()
-    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
-        for pe in graph.get_ponds()+graph.get_pes():
-            sources = graph.sources[pe]
-            for source in sources:
-                graph.get_node(source).reg = True
-
-    graph.update_sources_and_sinks()
-    graph.update_edge_kernels()
-
-    for node in graph.nodes:
-        if graph.get_node(node).reg:
-            graph.node_latencies[node] = 1
-        else:
-            graph.node_latencies[node] = 0
-
-    return graph
-
-def construct_tile_graph(graph):
-    tile_graph = Graph()
-    
-    for source in graph.get_tiles():
-        tile_graph.add_node(graph.get_node(source))
-
-        for dest in graph.get_tiles():
-            num_avail_regs = 0
-            reachable = False
-            visited = set()
-            queue = []
-            queue.append(source)
-            visited.add(source)
-            while queue:
-                n = queue.pop()
-
-                if n == dest and n != source:
-                    reachable = True
-
-                for node in graph.sinks[n]:
-                    if graph.get_node(n).route_type == "RMUX" and graph.get_node(node).route_type == "SB":
-                        num_avail_regs += 1
-
-                    if node not in visited:
-                        if graph.get_node(node).type_ == "tile":
-                            if node == dest:
-                                reachable = True
-                        else:
-                            queue.append(node)
-                            visited.add(node)
-            if reachable:
-                if graph.get_node(source).net_id != None:
-                    net_id = graph.get_node(source).net_id
-                else:
-                    net_id = graph.get_node(dest).net_id
-                tile_graph.add_node(graph.get_node(dest))
-                tile_graph.add_edge(source, dest)
-
-                tile_graph.edge_weights[(source, dest)] = num_avail_regs
-    
-    return tile_graph
-
-def verify_graph(graph):
-    while graph.FixCycles():
-        pass
-    
 PE_DELAY = 700
 MEM_DELAY = 800
 SB_UP_DELAY = 90
@@ -973,7 +754,7 @@ def load_id_to_name(id_filename):
     return id_to_name
      
 
-def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only):
+def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
@@ -985,7 +766,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, target_freq, load_only
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)
 
-    graph = construct_graph(placement, routing, id_to_name)
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
 
     verify_graph(graph)
     max_itr = None 

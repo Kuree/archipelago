@@ -7,412 +7,446 @@ import argparse
 from PIL import Image, ImageDraw
 from typing import Dict, List, Tuple, Set
 
+import glob
+
+import pythunder
+import pycyclone
+
 from pycyclone.io import load_placement
-from canal.pnr_io import __parse_raw_routing_result
-from .pipeline import construct_graph, sta, load_netlist
-
-def parse_args():
-    parser = argparse.ArgumentParser("PnR Visualization tool")
-    parser.add_argument("-a", "--app", "-d", required=True, dest="application", type=str, help="Application directory")
-    parser.add_argument("--width", required=True, dest="width", type=str, help="CGRA width")
-    parser.add_argument("--height", required=True, dest="height", type=str, help="CGRA height")
-    parser.add_argument("--crit_net", required=False, dest="crit_net", nargs='*', type=str, help="Critical Net")
-   
-    args = parser.parse_args()
-    # check filenames
-    dirname = os.path.join(args.application, "bin")
-    placement = os.path.join(dirname, "design.place")
-    assert os.path.exists(placement), placement + " does not exists"
-    route = os.path.join(dirname, "design.route")
-    assert os.path.exists(route), route + " does not exists"
-    folded = os.path.join(dirname, "design.folded")
-    assert os.path.exists(folded), folded + " does not exists"
-    # need to load routing files as well
-    # for now we just assume RMUX exists
-    return placement, route, folded, int(args.height) + 1, int(args.width) + 1, args.crit_net
+from archipelago.io import load_routing_result
+from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
 
 
-def arrowedLine(draw, ptA, ptB, size = 3, color=(0,255,0)):
-    """Draw line from ptA to ptB with arrowhead at ptB"""
-    # Get drawing context
-    width=1
+# Draw parameters
+GLOBAL_TILE_WIDTH = 200
+GLOBAL_TILE_MARGIN = 40
+GLOBAL_TILE_WIDTH_INNER = GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN
+GLOBAL_OFFSET_X = 20
+GLOBAL_OFFSET_Y = 20
+GLOBAL_NUM_TRACK = 5
+GLOBAL_ARROW_DISTANCE = GLOBAL_TILE_WIDTH_INNER // (GLOBAL_NUM_TRACK*2+1)
 
-    # Draw the line without arrows
-    draw.line((ptA,ptB), width=width, fill=color)
-     
+side_map = ["Right", "Bottom", "Left", "Top"]
+io_map = ["IN", "OUT"]
 
-    # Now work out the arrowhead
-    # = it will be a triangle with one vertex at ptB
-    # - it will start at 95% of the length of the line
-    # - it will extend 8 pixels either side of the line
-    x0, y0 = ptA
-    x1, y1 = ptB
-    # Now we can work out the x,y coordinates of the bottom of the arrowhead triangle
-    xb = 0*(x1-x0)+x0
-    yb = 0*(y1-y0)+y0
-
-    # Work out the other two vertices of the triangle
-    # Check if line is vertical
-    if x0==x1:
-       vtx0 = (xb-size, yb)
-       vtx1 = (xb+size, yb)
-    # Check if line is horizontal
-    elif y0==y1:
-       vtx0 = (xb, yb+size)
-       vtx1 = (xb, yb-size)
+def draw_arrow(draw, x, y, dir="UP", len=GLOBAL_TILE_MARGIN, color="Black", width=1, source_port=False, sink_port=False):
+    if dir == "UP":
+        dx = 0
+        dy = -len
+        rx = 0.09
+        ry = 0.8
+    elif dir == "DOWN":
+        dx = 0
+        dy = len
+        rx = 0.09
+        ry = 0.8
+    elif dir == "LEFT":
+        dx = -len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
+    elif dir == "RIGHT":
+        dx = len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
     else:
-       alpha = math.atan2(y1-y0,x1-x0)-90*math.pi/180
-       a = 8*math.cos(alpha)
-       b = 8*math.sin(alpha)
-       vtx0 = (xb+a, yb+b)
-       vtx1 = (xb-a, yb-b)
+        print("[Error] unsupported arrow direction")
+        exit()
+    xy = [(x,y), (x+dx, y+dy)]
+    if dir == "UP" or dir == "DOWN":
+        lxy = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
+        rxy = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+    else:
+        lxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
+        rxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
+    draw.line(xy=xy, fill=color, width=width)
+    draw.line(xy=lxy, fill=color, width=width)
+    draw.line(xy=rxy, fill=color, width=width)
 
-    #draw.point((xb,yb), fill=(255,0,0))    # DEBUG: draw point of base in red - comment out draw.polygon() below if using this line
-    #im.save('DEBUG-base.png')              # DEBUG: save
+    pw = (GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN)/40
+    if source_port:
+        xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+        draw.polygon(xy=xy, fill="Green", outline="Black", width=1)
 
-    # Now draw the arrowhead triangle
-    draw.polygon([vtx0, vtx1, ptB], fill=color)
+    if sink_port:
+        x += dx 
+        y += dy
+        xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+        draw.polygon(xy=xy, fill="Green", outline="Black", width=1)
 
+def draw_diagonal_arrow(draw, x, y, dir, x2, y2, dir2="UP", len=GLOBAL_TILE_MARGIN, color="Black", width=1):
+    if dir == "UP":
+        dx = 0
+        dy = -len
+        rx = 0.09
+        ry = 0.8
+    elif dir == "DOWN":
+        dx = 0
+        dy = len
+        rx = 0.09
+        ry = 0.8
+    elif dir == "LEFT":
+        dx = -len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
+    elif dir == "RIGHT":
+        dx = len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
+    else:
+        print("[Error] unsupported arrow direction")
+        exit()
+    xy = [(x,y), (x+dx, y+dy)]
+    if dir == "UP" or dir == "DOWN":
+        lxy = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
+        rxy = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+    else:
+        lxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
+        rxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
 
-class Node:
-    def __init__(self, blk_id: str):
-        self.next: Dict[str, List[Tuple["Node", str]]] = {}
-        self.parent: Dict[str, Node] = {}
-        self.blk_id = blk_id
+    if dir2 == "UP":
+        dx = 0
+        dy = -len
+        rx = 0.09
+        ry = 0.8
+    elif dir2 == "DOWN":
+        dx = 0
+        dy = len
+        rx = 0.09
+        ry = 0.8
+    elif dir2 == "LEFT":
+        dx = -len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
+    elif dir2 == "RIGHT":
+        dx = len
+        dy = 0
+        rx = 0.8
+        ry = 0.09
+    else:
+        print("[Error] unsupported arrow direction")
+        exit()
+    xy2 = [(x2,y2), (x2+dx, y2+dy)]
+    if dir2 == "UP" or dir2 == "DOWN":
+        lxy2 = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
+        rxy2 = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+    else:
+        lxy2 = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
+        rxy2 = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
 
-    def add_next(self, src_port: str, sink_port, node: "Node"):
-        if src_port not in self.next:
-            self.next[src_port] = []
-        self.next[src_port].append((node, sink_port))
-        node.parent[sink_port] = self
+    
+    new_xy = [xy[0], xy2[1]]
+    draw.line(xy=new_xy, fill=color, width=width)
+    # draw.line(xy=lxy, fill=color, width=width)
+    # draw.line(xy=rxy, fill=color, width=width)
 
-    def __repr__(self):
-        return self.blk_id
+def draw_arrow_between_sb(draw, node, node2, color="Black", width=1):
+    tile_x = node.x
+    tile_y = node.y
+    side = side_map[node.side]
+    io = io_map[node.io]
+    track_id = node.track
 
+    tile_x2 = node2.x
+    tile_y2 = node2.y
+    side2 = side_map[node2.side]
+    io2 = io_map[node2.io]
+    track_id2 = node2.track
 
-class Graph:
-    def __init__(self):
-        self.nodes: Dict[str, Node] = {}
+    if side=="Top":
+        if io=="IN":
+            dir = "DOWN"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
+        elif io=="OUT":
+            dir = "UP"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH
+    elif side=="Right":
+        if io=="IN":
+            dir = "LEFT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+        elif io=="OUT":
+            dir = "RIGHT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+    elif side=="Bottom":
+        if io=="IN":
+            dir = "UP"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io=="OUT":
+            dir = "DOWN"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+    elif side=="Left":
+        if io=="IN":
+            dir = "RIGHT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+        elif io=="OUT":
+            dir = "LEFT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
 
-    def get_node(self, blk_id: str):
-        if blk_id not in self.nodes:
-            node = Node(blk_id)
-            self.nodes[blk_id] = node
-        return self.nodes[blk_id]
+    if side2=="Top":
+        if io2=="IN":
+            dir2 = "DOWN"
+            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
+            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH
+        elif io2=="OUT":
+            dir2 = "UP"
+            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH
+    elif side2=="Right":
+        if io2=="IN":
+            dir2 = "LEFT"
+            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
+        elif io2=="OUT":
+            dir2 = "RIGHT"
+            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+    elif side2=="Bottom":
+        if io2=="IN":
+            dir2 = "UP"
+            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io2=="OUT":
+            dir2 = "DOWN"
+            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
+            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+    elif side2=="Left":
+        if io2=="IN":
+            dir2 = "RIGHT"
+            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+        elif io2=="OUT":
+            dir2 = "LEFT"
+            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
+    draw_diagonal_arrow(draw=draw, x=x, y=y, dir=dir, x2=x2, y2=y2, dir2=dir2, color=color, width=width)
 
-    def sort(self):
-        visited = set()
-        stack: List[Node] = []
-        for n in self.nodes.values():
-            if n.blk_id not in visited:
-                self.__sort(n, stack, visited)
-        return stack[::-1]
+def draw_arrow_on_tile(draw, tile_x, tile_y, side, io, track_id, color="Black", width=1, source_port=False, sink_port=False):
 
-    @staticmethod
-    def __sort(node: Node, stack, visited: Set[str]):
-        visited.add(node.blk_id)
-        for ns in node.next.values():
-            for n, _ in ns:
-                Graph.__sort(n, stack, visited)
-        stack.append(node)
-
-class RouteNode:
-    def __init__(self, node_id = 0, x = 0, y = 0, track = 0, net_id = 0, bit_width = 0):
-        self.node_id = node_id
-        self.x = x
-        self.y = y
-        self.track = track
-        self.net_id = net_id
-        self.bit_width = bit_width
-
-class Route:
-    def __init__(self, prev_node = None, node = None, continue_route = False, route_dir = None):
-        self.prev_node = prev_node
-        self.node = node
-        self.continue_route = continue_route
-        self.route_dir = route_dir
-
-
-class Visualizer():
-    def __init__(self, img_width, img_height, width, height, scale, num_tracks, graph, color_index, color_palette):
-        self.img_width = img_width 
-        self.img_height = img_height 
-        self.width = width 
-        self.height = height 
-        self.scale = scale
-        self.num_tracks = num_tracks
-        self.graph = graph
-        self.color_index = color_index
-        self.color_palette = color_palette
-
-    def draw_grid(self, draw):
-        draw.rectangle((0, self.img_width, 0, self.img_height), fill = (0, 0, 0, 255))
-        for i in range(0, self.height + 1):
-            # horizontal lines
-            draw.line((0, i * self.scale, self.img_width, i * self.scale),
-                    fill=(255, 255, 255), width=1)
-            draw.text((0, i * self.scale), str(i))
-                    
-        for i in range(0, self.width + 1):
-            # vertical lines
-            draw.line((i * self.scale, 0, i * self.scale, self.img_height),
-                    fill=(255, 255, 255), width=1)
-            draw.text((i * self.scale, 0), str(i))
-
-
-
-    def topological_sort(self):
-        stack = []
-        routes = []
-        for n in self.graph.inputs:
-            self.topological_sort_helper(n, stack, routes)
-        return stack[::-1]
-
-    def topological_sort_helper(self, node: str, stack, routes):
-
-        for ns in self.graph.sinks[node]:
-            self.topological_sort_helper(ns, stack, routes)
-
-        new_node = RouteNode()
-        new_node.node_id = node
-        new_node.x = node.x
-        new_node.y = node.y
-        new_node.track = node.track
-        new_node.net_id  = node.net_id
-        new_node.bit_width = node.bit_width
-
-
-        if self.graph.get_node(node).type_ == "route" and self.graph.get_node(node).track != None:
-            if len(stack) != 0:
-                prev_node = stack[-1]
-
-                if prev_node.net_id == new_node.net_id:
-                    if ((new_node.x - prev_node.x) + (new_node.y - prev_node.y) == 1):
-                        new_route = Route()
-                        new_route.prev_node = prev_node
-                        new_route.node = new_node
-                        new_route.route_dir = "x" if new_node.y == prev_node.y else "y"
-                        
-                        if len(routes) > 0:
-                            new_route.continue_route = routes[-1][1].net_id == new_node.net_id
-
-                        routes.append((prev_node, new_node))
-                        stack.append(new_node)
-                else:
-                    stack.append(new_node)
-            
-            else:
-                stack.append(new_node)
-
-    def draw_routes(self, draw, darken = False, crit_edges = None):
-        if darken:
-            color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 128)
-        else:
-            color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
-        net_colors = {}
-        for node in self.graph.nodes:
-            net_id = self.graph.get_node(node).net_id
-            net_colors[net_id] = color()
-            #if darken:
-            #    net_colors[net_id] = (int(color()[0]/2), int(color()[1]/2), int(color()[2]/2))
-
-        crit_tiles = []
-
-        for edge in self.graph.edges:
-            src_node = self.graph.get_node(edge[0])
-            dst_node = self.graph.get_node(edge[1])
-
-            if crit_edges != None and edge in crit_edges:
-                if src_node.type_ == 'tile':
-                    crit_tiles.append((src_node.x, src_node.y))
-                if dst_node.type_ == 'tile':
-                    crit_tiles.append((dst_node.x, dst_node.y))
-                elif dst_node.route_type == "SB":
-                    if len(self.graph.sinks[edge[1]]) > 0 and len(self.graph.sinks[self.graph.sinks[edge[1]][0]]) == 1:
-                        if self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0]).type_ == "tile":
-                            new_dst = self.graph.get_node(self.graph.sinks[self.graph.sinks[edge[1]][0]][0])
-                            crit_tiles.append((new_dst.x, new_dst.y))
-                    
-
-            if src_node.type_ == 'tile' or dst_node.type_ == 'tile':
-                continue
-
-            if src_node.x == dst_node.x and src_node.y == dst_node.y:
-                continue
-            elif src_node.x == dst_node.x:
-                edge_dir = "v"
-            else:
-                edge_dir = "h"
-
-            if src_node.net_id not in net_colors:
-                continue
-            
-            if crit_edges != None and edge in crit_edges:
-                route_color = (255, 0, 0, 255)
-            elif crit_edges != None:
-                continue
-            else:
-                route_color = net_colors[src_node.net_id]
-
-            x1 = src_node.x
-            y1 = src_node.y
-            x2 = dst_node.x
-            y2 = dst_node.y
-            track = src_node.track
-            start_track = 0
-            end_track = 0
-
-            if track == None:
-                track = dst_node.track
-                if track == None:
-                    track = 0
-
-            curr_node = edge[0]
-            while len(self.graph.sources[curr_node]) == 1:
-                curr_node = self.graph.sources[curr_node][0]
-                curr_node_g = self.graph.get_node(curr_node)
-                if src_node.x != curr_node_g.x or src_node.y != curr_node_g.y:
-                    prev_edge_dir = edge_dir
-                    if src_node.x == curr_node_g.x and src_node.y != curr_node_g.y:
-                        prev_edge_dir = "v"
-                    elif src_node.x != curr_node_g.x and src_node.y == curr_node_g.y:
-                        prev_edge_dir = "h"
-
-                    if edge_dir != prev_edge_dir:
-                        if curr_node_g.track == None:
-                            continue
-                        start_track = curr_node_g.track
-                    break      
-
-            curr_node = edge[0]
-            while len(self.graph.sinks[curr_node]) == 1:
-                curr_node = self.graph.sinks[curr_node][0]
-                curr_node_g = self.graph.get_node(curr_node)
-                if dst_node.x != curr_node_g.x or dst_node.y != curr_node_g.y:
-                    next_edge_dir = edge_dir
-                    if dst_node.x == curr_node_g.x and dst_node.y != curr_node_g.y:
-                        next_edge_dir = "v"
-                    elif dst_node.x != curr_node_g.x and dst_node.y == curr_node_g.y:
-                        next_edge_dir = "h"
-
-                    if edge_dir != next_edge_dir:
-                        if curr_node_g.track == None:
-                            continue
-                        end_track = curr_node_g.track
-                    break                
-
-            start_offset = (start_track / self.num_tracks) * 0.6 + 0.2
-            end_offset = (end_track / self.num_tracks) * 0.6 + 0.2
-            track_offset = (int(track) / self.num_tracks) * 0.6 + 0.2
-            
-            if src_node.bit_width == 1:
-                route_width = 2
-            else:
-                route_width = 4
-
-            if edge_dir == "v":
-                # Vertical trace
-                # draw.line(((x1 + 0.2 + track_offset) * scale, (y1 + start_offset) * scale, (x2 + 0.2 + track_offset) * scale, (y2 + end_offset) * scale), fill=route_color, width=2)
-                arrowedLine(draw, ((x1 + track_offset) * self.scale, (y1 + start_offset) * self.scale), ((x2 + track_offset) * self.scale, (y2 + end_offset) * self.scale), color=route_color, size=route_width)
-            else:
-                # Horizontal trace
-                # draw.line(((x1 + start_offset) * self.scale, (y1 + track_offset) * self.scale, (x2 + end_offset) * self.scale, (y2 + track_offset) * self.scale), fill=route_color, width=2)
-                arrowedLine(draw,((x1 +start_offset) * self.scale, (y1 + track_offset) * self.scale), ((x2 +end_offset) * self.scale, (y2 + track_offset) * self.scale), color=route_color, size=route_width)
-
-        return crit_tiles
-
-    def draw_tiles(self, draw, crit_tiles):
-        board_pos = self.graph.nodes
-        blk_id_list = list(board_pos.keys())
-        blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
-        for blk_id in blk_id_list:
-            node = self.graph.get_node(blk_id)
-
-            if node.type_ == "route":
-                continue
+    if side=="Top":
+        if io=="IN":
+            dir = "DOWN"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
+        elif io=="OUT":
+            dir = "UP"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH
+    elif side=="Right":
+        if io=="IN":
+            dir = "LEFT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+        elif io=="OUT":
+            dir = "RIGHT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+    elif side=="Bottom":
+        if io=="IN":
+            dir = "UP"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io=="OUT":
+            dir = "DOWN"
+            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
+    elif side=="Left":
+        if io=="IN":
+            dir = "RIGHT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+        elif io=="OUT":
+            dir = "LEFT"
+            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+    draw_arrow(draw=draw, x=x, y=y, dir=dir, color=color, width=width, source_port=source_port, sink_port=sink_port)
 
 
-            index = self.color_index.index(blk_id[0])
-            if crit_tiles != None:
-                if (node.x, node.y) in crit_tiles:
-                    color = self.color_palette[index]
-                else:
-                    color = (int(self.color_palette[index][0]/2), int(self.color_palette[index][1]/2), int(self.color_palette[index][2]/2))
+def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
+    
+    if "NORTH" in reg_name:
+        x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+        y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
+    elif "EAST" in reg_name:
+        x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH 
+        y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
+    elif "SOUTH" in reg_name:
+        x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+        y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH 
+    elif "WEST" in reg_name:
+        x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH 
+        y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
 
-            width_frac = 1
-            size = self.scale - 1
-            width = size * width_frac
-            shrink = self.scale/5 
-            x, y = node.x, node.y
+    pw = (GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN)/20
+    xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+    draw.polygon(xy=xy, fill="Red", outline="Black", width=1)
 
-            
-            draw.rectangle((x * self.scale + 1 + shrink, y * self.scale + 1 + shrink, x * self.scale + width - shrink,
-                        y * self.scale + size - shrink), fill=color)
-            draw.text((x * self.scale + 1 + shrink, y * self.scale + 1 + shrink), blk_id)
+def find_last_sb(routing_result_graph, node):
+    found_sb = False
+    found_port = False
 
-            for src in self.graph.sources[blk_id]:
-                if self.graph.get_node(src).reg:
-                    color = self.color_palette[self.color_index.index("r")]
-                    if (node.x, node.y) not in crit_tiles:
-                        color = (int(color[0]/2), int(color[1]/2), int(color[2]/2))
+    curr_node = node
+    while not found_sb and not found_port:
+        assert len(routing_result_graph.sources[curr_node]) == 1, (curr_node, routing_result_graph.sources[curr_node])
 
-                    width_frac = 1
-                    size = self.scale - 1
-                    width = size * width_frac
-                    shrink = self.scale/2
-                    shrink2 = self.scale/5 
-                    draw.rectangle((x * self.scale + 1 + shrink2, y * self.scale + 1 + shrink, x * self.scale + width - shrink,
-                                y * self.scale + size - shrink2), fill=color)
+        source = routing_result_graph.sources[curr_node][0]
 
-def visualize_pnr(graph, crit_edges, app_dir):
+        if isinstance(source, TileNode) or source.route_type == RouteType.PORT:
+            found_port = True
+        elif source.route_type == RouteType.SB:
+            found_sb = True
 
-    width = 0
-    height = 0
-    for node in graph.nodes:
-        width = max(width, graph.get_node(node).x)
-        height = max(height, graph.get_node(node).y)
-    width += 1
-    height += 1
+        curr_node = source
 
-    color_index = "imoprMcdIA"
-    color_palette = [(166, 206, 227),
-                (31, 120, 180),
-                (178, 223, 138),
-                (51, 160, 44),
-                (251, 154, 153),
-                (227, 26, 28),
-                (253, 191, 111),
-                (255, 127, 0),
-                (202, 178, 214),
-                (106, 61, 154),
-                (255, 255, 153),
-                (177, 89, 40)]
+    if found_sb:
+        return curr_node
+    else:
+        return None
 
-    scale = 60
-    img_width = width * scale
-    img_height = height * scale
-    num_tracks = 5
+def draw_used_routes(draw, routing_result_graph, width):
+    color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
+    net_colors = {}
 
-    visualizer = Visualizer(img_width, img_height, width, height, scale, num_tracks, graph, color_index, color_palette)
-   
-    im = Image.new("RGBA", (img_width, img_height), "BLACK")
-    draw = ImageDraw.Draw(im)
+    for node in routing_result_graph.get_routes():
+        if node.route_type == RouteType.SB and node.bit_width == width:
+            if node.net_id not in net_colors:
+                net_colors[node.net_id] = color()
 
-    visualizer.draw_grid(draw)
+            source_port = False
+            sink_port = False
+            for source in routing_result_graph.sources[node]:
+                if isinstance(source, RouteNode) and source.route_type == RouteType.PORT:
+                    source_port = True
+            for sink in routing_result_graph.sinks[node]:
+                if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT:
+                    sink_port = True                
 
-    crit_tiles = visualizer.draw_routes(draw, darken = (crit_edges != None))
-    visualizer.draw_tiles(draw, crit_tiles)
+            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=5, source_port=source_port, sink_port = sink_port)
 
-    if crit_edges != None:
-        crit_tiles = visualizer.draw_routes(draw, darken = False, crit_edges = crit_edges)
-        visualizer.draw_tiles(draw, crit_tiles)
-        crit_tiles = visualizer.draw_routes(draw, darken = False, crit_edges = crit_edges)
+            last_sb = find_last_sb(routing_result_graph, node)
 
-    im.save(f'{app_dir}/pnr_result.png', format='PNG')
+            if last_sb:
+                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=5)
+        elif node.route_type == RouteType.REG and node.bit_width == width:
+            draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
+
+
+
+
+def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, width=2):
+    if tile_type == TileType.PE:
+        color_tile = "dodgerblue"
+        color_line = "Black"
+        pr = 0.4
+    elif tile_type == TileType.MEM:
+        color_tile = "salmon"
+        color_line = "Black"
+        pr = 0.35
+    elif tile_type == TileType.POND:
+        color_tile = "Khaki"
+        color_line = "Black"
+        pr = 0.35
+
+    elif tile_type == TileType.IO1 or tile_type == TileType.IO16:
+        color_tile = "palegreen"
+        color_line = "Black"
+        pr = 0.4
+    else:
+        color_tile = "lightgrey"
+        color_line = "Black"
+        pr = 0.4
+    px=GLOBAL_OFFSET_X + x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+    py=GLOBAL_OFFSET_Y + y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+    pw = GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN
+    xy = [(px,py), (px+pw,py), (px+pw,py+pw), (px,py+pw)]
+    txy = (px + int(pw*pr), py + int(pw*0.4))
+    t2xy = (px + int(pw*pr), py + int(pw*0.6))
+    draw.polygon(xy=xy, fill=color_tile, outline=color_line, width=width)
+
+    if tile_type:
+        draw.text(xy=txy, text=str(tile_type).split("TileType.")[1], fill="Black")
+    if tile_id:
+        draw.text(xy=t2xy, text=tile_id, fill="Black")
+    # draw its coordinate
+    cxy = (px + int(pw*0.25), py + int(pw*0.15))
+    draw.text(xy=cxy, text=f"({x},{y})", fill="Black")
+
+def draw_all_tiles(draw, graph):
+    for x, y in graph:
+        switchbox = graph[x, y].switchbox
+        sides = switchbox.SIDES
+        # draw the tiles
+        create_tile(draw=draw, x=x, y=y)
+
+        # draw the arrows
+        for i in range(sides):
+            side = pycyclone.SwitchBoxSide(i)
+            sbs = switchbox.get_sbs_by_side(side)
+            for io in ["IN", "OUT"]:
+                for i in range(len(sbs)):
+                    draw_arrow_on_tile(draw, tile_x=x, tile_y=y, side=side.name, io=io, track_id=i%GLOBAL_NUM_TRACK)
+
+def draw_used_tiles(draw, graph):
+    tiles = graph.tile_id_to_tile
+    blk_id_list = list(tiles.keys())
+    blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
+    for blk_id in blk_id_list:
+        node = tiles[blk_id]
+        create_tile(draw=draw, x=node.x, y=node.y, tile_type=node.tile_type, tile_id=blk_id)
+
+
+def visualize_pnr(routing_graphs, routing_result_graph, crit_edges, app_dir):
+
+    array_width = 0
+    array_height = 0
+    for node in routing_result_graph.nodes:
+        array_width = max(array_width, node.x)
+        array_height = max(array_height, node.y)
+    array_width += 1
+    array_height += 1
+
+    routing_result_graph.print_graph("graph")
+    
+    for width, graph in routing_graphs.items():
+        # initialize image
+        img_width = array_width*GLOBAL_TILE_WIDTH + 3*GLOBAL_OFFSET_X
+        img_height = array_height*GLOBAL_TILE_WIDTH + 3*GLOBAL_OFFSET_X
+        img = Image.new('RGB', (img_width, img_height), "White")
+        draw = ImageDraw.Draw(img)
+        # draw all the tiles
+        draw_all_tiles(draw, graph)
+
+        draw_used_tiles(draw, routing_result_graph)
+
+        draw_used_routes(draw, routing_result_graph, width)
+
+        img.save(f'{app_dir}/pnr_result_{width}.png', format='PNG')
+
+def load_graph(graph_files):
+    graph_result = {}
+    for graph_file in graph_files:
+        bit_width = os.path.splitext(graph_file)[0]
+        bit_width = int(os.path.basename(bit_width))
+        graph = pycyclone.io.load_routing_graph(graph_file)
+        graph_result[bit_width] = graph
+    return graph_result
+
 
 def parse_args():
-    parser = argparse.ArgumentParser("CGRA Retiming tool")
-    parser.add_argument("-a", "--app", "-d", required=True, dest="application", type=str, help="Application directory")
+    parser = argparse.ArgumentParser("Routing Result Visualization Tool")
+    parser.add_argument("-a", "--app", "-d", required=True,
+                        dest="application", type=str)
     args = parser.parse_args()
     dirname = os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
@@ -421,23 +455,29 @@ def parse_args():
     assert os.path.exists(placement), placement + " does not exists"
     route = os.path.join(dirname, "design.route")
     assert os.path.exists(route), route + " does not exists"
-    return netlist, placement, route
+    graph1 = os.path.join(dirname, "1.graph")
+    assert os.path.exists(graph1), route + " does not exists"
+    graph16 = os.path.join(dirname, "16.graph")
+    assert os.path.exists(graph16), route + " does not exists"
+    return netlist, placement, route, graph1, graph16
+
 
 def main():
-    netlist_file, placement_file, routing_file = parse_args()
+    packed_file, placement_file, routing_file, graph1, graph16 = parse_args()
 
-    print("Loading netlist")
-    netlist, id_to_name = load_netlist(netlist_file)
-    print("Loading placement")
+    id_to_name = pythunder.io.load_id_to_name(packed_file)
+    netlist, buses = pythunder.io.load_netlist(packed_file)
     placement = load_placement(placement_file)
-    print("Loading routing")
-    routing = __parse_raw_routing_result(routing_file)
+    routing = load_routing_result(routing_file)
 
-    app_dir = os.path.dirname(netlist_file)
-    graph = construct_graph(placement, routing, id_to_name)
+    routing_graphs = load_graph([graph1, graph16])
 
-    visualize_pnr(graph, None, app_dir)
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
+
+    app_dir = os.path.dirname(packed_file)
+
+    visualize_pnr(routing_graphs, routing_result_graph, None, app_dir)
+
 
 if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     main()

@@ -308,7 +308,7 @@ def main():
                                 tile_track_usage += track_usage[width][(x,y)][side][io][track]
                     draw_usage(draw=draw, x=x, y=y, used_track=tile_track_usage, total_track=40)
             # save the congestion map
-            img.save(f"/aha/archipelago/congestion_{width}bit.png", format="PNG")
+            img.save(f"bin/congestion_{width}bit.png", format="PNG")
         # report tatal track usage
         print()
         report_track_usage(bit_width=width, width=array_width, height=array_height, track_usage=track_usage)
