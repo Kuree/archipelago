@@ -167,10 +167,10 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
                 cycles = {0}
 
         for parent in graph.sources[node]:
-            if parent not in node_cycles[node.kernel]:
+            if parent not in node_cycles:
                 c = 0
             else:
-                c = node_cycles[node.kernel][parent]
+                c = node_cycles[parent]
             
             if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
                 c += node.input_port_latencies[parent.port]
@@ -495,7 +495,7 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     # print("\nBranch delay matching kernels")
     # branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
-    # print("\nChecking delay matching all nodes")
+    print("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
     # compute_latencies = get_compute_unit_cycles(graph, id_to_name, placement, routing)
