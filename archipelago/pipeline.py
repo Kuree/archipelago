@@ -7,7 +7,7 @@ import glob
 import json
  
 from typing import Dict, List, NoReturn, Tuple, Set
-from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
+from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_graph, construct_kernel_graph, TileType, RouteType, TileNode, RouteNode
 from archipelago.sta import sta
 
 def find_break_idx(graph, crit_path):
@@ -259,88 +259,42 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
 
     for node in nodes:
         cycles = set()
-        g_node = kernel_graph.get_node(node)
-
-
+ 
         if len(kernel_graph.sources[node]) == 0:
-            if g_node.type_ == "compute":
+            if node.kernel_type == KernelNodeType.COMPUTE:
                 cycles = {None}
             else:
                 cycles = {0}
 
         for parent in kernel_graph.sources[node]:
-            g_parent = kernel_graph.get_node(parent)
             if parent not in node_cycles:
                 c = 0
             else:
                 c = node_cycles[parent]
             
             if c is not None:
-                c += g_node.latency
+                c += node.latency
 
-            if g_parent.kernel != "reset" and not (g_parent.type_ == "mem" and parent[0] == 'm'):
+            if parent.kernel != "reset":
                 cycles.add(c)
         
         if None in cycles:
             cycles.remove(None)
+
         if len(kernel_graph.sources[node]) > 1 and len(cycles) > 1:
             print(f"\tIncorrect kernel delay: {node} {cycles}")
             
-            source_cycles = [node_cycles[source] for source in kernel_graph.sources[node] if node_cycles[source] != None]
-            max_cycle = max(source_cycles)
-            for source in kernel_graph.sources[node]:
-                if node_cycles[source] != None and node_cycles[source] != max_cycle:
-                    print(f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}")
-                    add_delay_to_kernel(graph, source, max_cycle - node_cycles[source], id_to_name, placement, routing)
+            # source_cycles = [node_cycles[source] for source in kernel_graph.sources[node] if node_cycles[source] != None]
+            # max_cycle = max(source_cycles)
+            # for source in kernel_graph.sources[node]:
+            #     if node_cycles[source] != None and node_cycles[source] != max_cycle:
+            #         print(f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}")
+            #         add_delay_to_kernel(graph, source, max_cycle - node_cycles[source], id_to_name, placement, routing)
         if len(cycles) > 0:
             node_cycles[node] = max(cycles)
         else:
             node_cycles[node] = None
 
-
-def get_compute_unit_cycles(graph, id_to_name, placement, routing):
-    nodes = graph.topological_sort()
-    node_cycles = {}
-
-    for node in nodes:
-        cycles = set()
-        g_node = graph.get_node(node)
-
-        if g_node.kernel not in node_cycles:
-            node_cycles[g_node.kernel] = {}
-
-        if len(graph.sources[node]) == 0:
-            cycles = {0}
-
-        for parent in graph.sources[node]:
-            g_parent = graph.get_node(parent)
-            if parent not in node_cycles[g_node.kernel]:
-                c = 0
-            else:
-                c = node_cycles[g_node.kernel][parent]
-            
-            if g_node.type_ == "route":
-                if graph.node_latencies[node] != 0:
-                    if len(graph.sinks[node]) > 0:
-                        child = graph.sinks[node][0]
-                        if (child not in id_to_name or "d_reg_" not in id_to_name[child]) and (parent not in graph.get_mems() or parent in graph.get_roms()):
-                            if c != None: 
-                                c += graph.node_latencies[node]
-            if parent not in graph.get_mems() or parent in graph.get_roms():
-                cycles.add(c)
-        
-  
-        if (node in graph.get_pes() and len(graph.sources[node]) == 0) or (g_node.type_ == "route" and g_node.port == "flush"):
-            cycles = {None}
-  
-        if None in cycles:
-            cycles.remove(None)
-        if len(graph.sources[node]) > 1 and len(cycles) > 1:
-            print(f"INCORRECT COMPUTE UNIT CYCLES: {g_node.kernel} {node} {cycles}")
-        if len(cycles) > 0:
-            node_cycles[g_node.kernel][node] = max(cycles)
-        else:
-            node_cycles[g_node.kernel][node] = None
 
     kernel_latencies = {}
     for kernel in node_cycles:
@@ -352,9 +306,6 @@ def get_compute_unit_cycles(graph, id_to_name, placement, routing):
 
 
 def flush_cycles(graph):
-    nodes = graph.topological_sort()
-    node_cycles = {}
-
     for io in graph.get_input_ios():
         if graph.get_node(io).kernel == "io1in_reset":
             break
@@ -363,83 +314,18 @@ def flush_cycles(graph):
 
     for mem in graph.get_mems():
         for curr_node in graph.sources[mem]:
-            if graph.get_node(curr_node).port == "flush":
+            if curr_node.port == "flush":
                 break
-        if graph.get_node(curr_node).port != "flush":
+        if curr_node.port != "flush":
             continue
         
         flush_cycles[mem] = 0
         while curr_node != io:
-            g_curr_node = graph.get_node(curr_node)
-            if g_curr_node.type_ == "route" and graph.node_latencies[curr_node] != 0:
+            if isinstance(curr_node, RouteNode) and graph.node_latencies[curr_node] != 0:
                 flush_cycles[mem] += graph.node_latencies[curr_node]
             curr_node = graph.sources[curr_node][0]
 
     return flush_cycles
-
-def construct_kernel_graph(graph, new_latencies, flush_latencies):
-    kernel_graph = KernelGraph()
-
-    graph.regs = None
-    graph.shift_regs = None
-
-    compute_tiles = set()
-    for tile in graph.get_pes() + graph.get_regs() + graph.get_ponds():
-        if tile not in graph.get_shift_regs():
-            compute_tiles.add(tile)
-
-    for source in graph.get_tiles():
-        if source in compute_tiles:
-            source_id = graph.get_node(source).kernel
-            kernel_graph.add_node(KernelNode(kernel = source_id))
-            kernel_graph.get_node(source_id).latency = new_latencies[source_id]
-            kernel_graph.get_node(source_id).type_ = "compute"
-        else:
-            source_id = source 
-            kernel_graph.add_node(KernelNode(mem_id = source_id))
-            kernel_graph.get_node(source_id).type_ = "mem"
-            if "reset" in graph.get_node(source).kernel:
-                kernel_graph.get_node(source_id).kernel = "reset"
-        for dest in graph.get_tiles():
-            if dest in compute_tiles:
-                dest_id = graph.get_node(dest).kernel
-                kernel_graph.add_node(KernelNode(kernel = dest_id))
-                kernel_graph.get_node(dest_id).latency = new_latencies[dest_id]
-                kernel_graph.get_node(dest_id).type_ = "compute"
-            else:
-                dest_id = dest 
-                kernel_graph.add_node(KernelNode(mem_id = dest_id))
-                kernel_graph.get_node(dest_id).type_ = "mem"
-                if "reset" in graph.get_node(dest).kernel:
-                    kernel_graph.get_node(dest_id).kernel = "reset"
-
-            if source_id != dest_id:
-                reachable = False
-                visited = set()
-                queue = []
-                queue.append(source)
-                visited.add(source)
-                while queue:
-                    n = queue.pop()
-
-                    if n == dest and n != source:
-                        reachable = True
-
-                    for node in graph.sinks[n]:
-                        if node not in visited:
-                            if graph.get_node(node).type_ == "tile":
-                                if node == dest:
-                                    reachable = True
-                            else:
-                                queue.append(node)
-                                visited.add(node)
-
-                if reachable:
-                    kernel_graph.add_edge(source_id, dest_id)
-
-    kernel_graph.update_sources_and_sinks()
-    kernel_graph.print_graph("kernel_graph")
-    return kernel_graph
 
 
 def calculate_latencies(kernel_graph, kernel_latencies):
@@ -488,14 +374,13 @@ def calculate_latencies(kernel_graph, kernel_latencies):
 def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     
     print("\nBranch delay matching within kernels")
-    branch_delay_match_within_kernels(graph, id_to_name, placement, routing)
+    kernel_latencies = branch_delay_match_within_kernels(graph, id_to_name, placement, routing)
 
-    # compute_latencies = get_compute_unit_cycles(graph, id_to_name, placement, routing)
-    # flush_latencies = flush_cycles(graph)
-    # kernel_graph = construct_kernel_graph(graph, compute_latencies, flush_latencies)
+    flush_latencies = flush_cycles(graph)
+    kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    # print("\nBranch delay matching kernels")
-    # branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
+    print("\nBranch delay matching kernels")
+    branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
     print("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
@@ -504,11 +389,11 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     # flush_latencies = flush_cycles(graph)
     # kernel_graph = construct_kernel_graph(graph, compute_latencies, flush_latencies)
 
-    # kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
-    # flush_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "flush_latencies")
-    # pond_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "pond_latencies")
+    kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
+    flush_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "flush_latencies")
+    pond_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "pond_latencies")
 
-    # assert os.path.exists(kernel_latencies_file)
+    assert os.path.exists(kernel_latencies_file)
 
     # f = open(kernel_latencies_file, "r")
     # kernel_latencies = json.load(f)

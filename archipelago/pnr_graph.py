@@ -25,15 +25,7 @@ class RouteNode:
             f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
         assert self.tile_id is not None
 
-        if route_type == "SB":
-            self.route_type = RouteType.SB
-        elif route_type == "RMUX":
-            self.route_type = RouteType.RMUX
-        elif route_type == "PORT":
-            self.route_type = RouteType.PORT
-        elif route_type == "REG":
-            self.route_type = RouteType.REG
-
+        self.route_type = RouteType.SB
         assert self.route_type is not None
 
         self.track = track
@@ -152,7 +144,7 @@ class RoutingResultGraph:
     def get_tile(self, tile_id):
         if tile_id in self.tile_id_to_tile:
             return self.tile_id_to_tile[tile_id]
-        return None        
+        return None
 
     def get_tiles(self):
         tiles = []
@@ -400,19 +392,19 @@ class RoutingResultGraph:
     def segment_to_node(self, segment, net_id):
         if segment[0] == "SB":
             track, x, y, side, io_, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type="SB", track=track,
+            node = RouteNode(x, y, route_type=RouteType.SB, track=track,
                         side=side, io=io_, bit_width=bit_width, net_id=net_id)
         elif segment[0] == "PORT":
             port_name, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type="PORT",
+            node = RouteNode(x, y, route_type=RouteType.PORT,
                         bit_width=bit_width, net_id=net_id, port=port_name)
         elif segment[0] == "REG":
             reg_name, track, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type="REG", track=track,
+            node = RouteNode(x, y, route_type=RouteType.REG, track=track,
                         bit_width=bit_width, net_id=net_id, reg_name=reg_name, port="reg")
         elif segment[0] == "RMUX":
             rmux_name, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type="RMUX",
+            node = RouteNode(x, y, route_type=RouteType.RMUX,
                         bit_width=bit_width, net_id=net_id, rmux_name=rmux_name)
         else:
             raise ValueError("Unrecognized route type")
@@ -511,8 +503,128 @@ class RoutingResultGraph:
 
                 if reachable:
                     g.edge(str(source), str(dest))
-            
+
         g.render(filename=filename)
+
+
+class KernelNodeType(Enum):
+    COMPUTE = 1
+    MEM = 2
+    RESET = 3
+
+
+class KernelNode:
+    def __init__(self, mem_id=None, kernel=None, kernel_type=None, latency=0,
+                 flush_latency=0, has_shift_regs=False):
+        self.mem_id = mem_id
+        self.kernel = kernel
+        self.kernel_type = kernel_type
+        self.latency = latency
+        self.flush_latency = flush_latency
+        self.has_shift_regs = has_shift_regs
+
+    def __repr__(self):
+        if self.kernel:
+            return f"{self.kernel} {self.type_} {self.latency} {self.flush_latency}"
+        else:
+            return f"{self.mem_id} {self.type_} {self.latency} {self.flush_latency}"
+
+
+class KernelGraph:
+    def __init__(self):
+        self.nodes: List[KernelNode] = []
+        self.edges: List[(KernelNode, KernelNode)] = []
+        self.inputs: List[KernelNode] = []
+        self.outputs: List[KernelNode] = []
+        self.sources: Dict[KernelNode, List[KernelNode]] = {}
+        self.sinks: Dict[KernelNode, List[KernelNode]] = {}
+
+    def is_reachable(self, source, dest):
+        visited = set()
+        queue = []
+
+        queue.append(source)
+        visited.add(source)
+
+        while queue:
+            n = queue.pop()
+
+            if n == dest:
+                return True
+
+            for node in self.sinks[n]:
+                if node not in visited:
+                    queue.append(node)
+                    visited.add(node)
+        return False
+
+    def add_node(self, node: KernelNode):
+        if node not in self.nodes:
+            self.nodes.append(node)
+
+    def add_edge(self, node1, node2):
+        assert node1 in self.nodes, f"{node1} not in nodes"
+        assert node2 in self.nodes, f"{node2} not in nodes"
+
+        assert isinstance(node1, KernelNode)
+        assert isinstance(node2, KernelNode)
+
+        if (node1, node2) not in self.edges:
+            self.edges.append((node1, node2))
+
+        if node2 not in self.sources:
+            self.sources[node2] = []
+        if node1 not in self.sources[node2]:
+            self.sources[node2].append(node1)
+
+        if node1 not in self.sinks:
+            self.sinks[node1] = []
+        if node2 not in self.sinks[node1]:
+            self.sinks[node1].append(node2)
+
+    def update_sources_and_sinks(self):
+        self.inputs = []
+        self.outputs = []
+        for node in self.nodes:
+            self.sources[node] = []
+            self.sinks[node] = []
+        for node in self.nodes:
+            for source, sink in self.edges:
+                if node == source:
+                    self.sources[sink].append(source)
+                elif node == sink:
+                    self.sinks[source].append(sink)
+        for node in self.nodes:
+            if len(self.sources[node]) == 0:
+                self.inputs.append(node)
+            if len(self.sinks[node]) == 0:
+                self.outputs.append(node)
+
+    def topological_sort(self):
+        visited = set()
+        stack: List[str] = []
+        for n in self.inputs:
+            if n not in visited:
+                self.topological_sort_helper(n, stack, visited)
+        return stack[::-1]
+
+    def topological_sort_helper(self, node: str, stack, visited: Set[str]):
+        visited.add(node)
+        for ns in self.sinks[node]:
+            if ns not in visited:
+                self.topological_sort_helper(ns, stack, visited)
+        stack.append(node)
+
+    def print_graph(self, filename):
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node))
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
 
 def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
     graph = RoutingResultGraph()
@@ -597,3 +709,70 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
         pass
 
     return graph
+
+
+def construct_kernel_graph(graph, new_latencies):
+    kernel_graph = KernelGraph()
+
+    compute_tiles = set()
+    for tile in graph.get_pes() + graph.get_regs() + graph.get_ponds():
+        if tile not in graph.get_shift_regs():
+            compute_tiles.add(tile)
+
+    for source in graph.get_tiles():
+        if source in compute_tiles:
+            source_id = source.kernel
+            kernel_node = KernelNode(kernel=source_id)
+            kernel_graph.add_node(kernel_node)
+            kernel_node.latency = new_latencies[source_id]
+            kernel_node.kernel_type = KernelNodeType.COMPUTE
+        else:
+            source_id = source.tile_id
+            kernel_node = KernelNode(kernel=source_id)
+            kernel_graph.add_node(kernel_node)
+            kernel_node.kernel_type = KernelNodeType.MEM
+            if "reset" in source.kernel:
+                kernel_node.kernel_type = KernelNodeType.RESET
+
+        for dest in graph.get_tiles():
+            if dest in compute_tiles:
+                dest_id = dest.kernel
+                kernel_node = KernelNode(kernel=dest_id)
+                kernel_graph.add_node(kernel_node)
+                kernel_node.latency = new_latencies[dest_id]
+                kernel_node.kernel_type = KernelNodeType.COMPUTE
+            else:
+                dest_id = dest.tile_id
+                kernel_node = KernelNode(kernel=dest_id)
+                kernel_graph.add_node(kernel_node)
+                kernel_node.kernel_type = KernelNodeType.MEM
+                if "reset" in dest.kernel:
+                    kernel_node.kernel_type = KernelNodeType.RESET
+
+            if source != dest:
+                reachable = False
+                visited = set()
+                queue = []
+                queue.append(source)
+                visited.add(source)
+                while queue:
+                    n = queue.pop()
+
+                    if n == dest and n != source:
+                        reachable = True
+
+                    for node in graph.sinks[n]:
+                        if node not in visited:
+                            if isinstance(node, TileNode):
+                                if node == dest:
+                                    reachable = True
+                            else:
+                                queue.append(node)
+                                visited.add(node)
+
+                if reachable:
+                    kernel_graph.add_edge(source, dest)
+
+    kernel_graph.update_sources_and_sinks()
+    
+    return kernel_graph

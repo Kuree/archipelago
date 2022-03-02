@@ -332,12 +332,12 @@ def draw_used_routes(draw, routing_result_graph, width):
                 if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT:
                     sink_port = True                
 
-            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=5, source_port=source_port, sink_port = sink_port)
+            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=10, source_port=source_port, sink_port = sink_port)
 
             last_sb = find_last_sb(routing_result_graph, node)
 
             if last_sb:
-                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=5)
+                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=10)
         elif node.route_type == RouteType.REG and node.bit_width == width:
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
 
