@@ -140,7 +140,12 @@ def main():
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
+    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+        pe_latency = 1
+    else:
+        pe_latency = 0
+
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
     
     sta(routing_result_graph)
 

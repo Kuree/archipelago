@@ -472,7 +472,12 @@ def main():
 
     routing_graphs = load_graph([graph1, graph16])
 
-    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
+    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+        pe_latency = 1
+    else:
+        pe_latency = 0
+
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
 
     app_dir = os.path.dirname(packed_file)
 
