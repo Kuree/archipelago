@@ -205,7 +205,7 @@ class RoutingResultGraph:
         if not self.shift_regs:
             regs = []
             for node in self.nodes:
-                if isinstance(node, TileNode) and node.tile_type == TileType.MEM \
+                if isinstance(node, TileNode) and node.tile_type == TileType.REG \
                    and "d_reg_" in self.id_to_name[node.tile_id]:
                     regs.append(node)
             self.shift_regs = regs
@@ -224,7 +224,7 @@ class RoutingResultGraph:
         if not self.pes:
             pes = []
             for node in self.nodes:
-                if isinstance(node, TileNode) and node.tile_type == TileType.POND:
+                if isinstance(node, TileNode) and node.tile_type == TileType.PE:
                     pes.append(node)
             self.pes = pes
         return self.pes
@@ -484,10 +484,10 @@ class RoutingResultGraph:
     def print_graph_tiles_only(self, filename):
         g = Digraph()
         for source in self.get_tiles():
-            if source[0] == 'r':
-                g.node(source, label = f"{source}\n{source.kernel}", shape='box')
+            if source.tile_id[0] == 'r':
+                g.node(str(source), label = f"{source}\n{source.kernel}", shape='box')
             else:
-                g.node(source, label = f"{source}\n{source.kernel}")
+                g.node(str(source), label = f"{source}\n{source.kernel}")
             for dest in self.get_tiles():
                 reachable = False
                 visited = set()
@@ -502,7 +502,7 @@ class RoutingResultGraph:
 
                     for node in self.sinks[n]:
                         if node not in visited:
-                            if isinstance(node, TileNode)
+                            if isinstance(node, TileNode):
                                 if node == dest:
                                     reachable = True
                             else:
@@ -510,11 +510,7 @@ class RoutingResultGraph:
                                 visited.add(node)
 
                 if reachable:
-                    if source.net_id != None:
-                        net_id = source.net_id
-                    else:
-                        net_id = dest.net_id
-                    g.edge(source, dest, label=net_id)
+                    g.edge(str(source), str(dest))
             
         g.render(filename=filename)
 

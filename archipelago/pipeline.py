@@ -650,9 +650,15 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
 
     # visualize_pnr(graph, crit_nets)
 
-    graph = construct_graph(placement, routing, id_to_name, netlist)
+    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+        pe_cycles = 1
+    else:
+        pe_cycles = 0
+
+    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
     
     graph.print_graph("pnr_graph")
+    graph.print_graph_tiles_only("pnr_graph_tile")
 
     curr_freq, crit_path, crit_nets = sta(graph)
     update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
