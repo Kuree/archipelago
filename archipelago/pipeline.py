@@ -8,7 +8,7 @@ import json
  
 from typing import Dict, List, NoReturn, Tuple, Set
 from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
-
+from archipelago.sta import sta
 
 def find_break_idx(graph, crit_path):
     crit_path_adjusted = [abs(c - crit_path[-1][1]/2) for n,c in crit_path]
@@ -220,7 +220,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             
             if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
                 c += node.input_port_latencies[parent.port]
-
+             
             cycles.add(c)
   
         if None in cycles:
@@ -603,7 +603,6 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
         if os.path.isfile(id_to_name_filename):
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
-
     # import copy
     # placement_save = copy.deepcopy(placement)
     # routing_save = copy.deepcopy(routing)
@@ -652,6 +651,9 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
     # visualize_pnr(graph, crit_nets)
 
     graph = construct_graph(placement, routing, id_to_name, netlist)
+    
+    graph.print_graph("pnr_graph")
+
     curr_freq, crit_path, crit_nets = sta(graph)
     update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
 

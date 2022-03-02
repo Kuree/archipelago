@@ -409,7 +409,7 @@ class RoutingResultGraph:
         elif segment[0] == "REG":
             reg_name, track, x, y, bit_width = segment[1:]
             node = RouteNode(x, y, route_type="REG", track=track,
-                        bit_width=bit_width, net_id=net_id, reg_name=reg_name)
+                        bit_width=bit_width, net_id=net_id, reg_name=reg_name, port="reg")
         elif segment[0] == "RMUX":
             rmux_name, x, y, bit_width = segment[1:]
             node = RouteNode(x, y, route_type="RMUX",

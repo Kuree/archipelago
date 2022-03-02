@@ -7,7 +7,7 @@ from .route import route
 from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
 import pycyclone
-#from archipelago.pipeline import pipeline_pnr
+from archipelago.pipeline import pipeline_pnr
 
 class PnRException(Exception):
     def __init__(self):
@@ -103,8 +103,8 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
 
-#    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
-#        placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, load_only, netlist)
+    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+        placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, input_netlist[0], load_only)
 
     # tear down
     if use_temp:
