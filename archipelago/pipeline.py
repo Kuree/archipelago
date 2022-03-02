@@ -253,6 +253,16 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
                 #         for _ in range(max_parent_cycles - delay):
                 #             break_at(graph, node, id_to_name, placement, routing)
 
+    kernel_latencies = {}
+    for kernel in node_cycles:
+        kernel_cycles = [cyc for cyc in node_cycles[kernel].values() if cyc != None]
+        kernel_cycles.append(0)
+        kernel_latencies[kernel] = max(kernel_cycles)
+
+    return kernel_latencies
+
+
+
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
     nodes = kernel_graph.topological_sort()
     node_cycles = {}
@@ -296,34 +306,28 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
             node_cycles[node] = None
 
 
-    kernel_latencies = {}
-    for kernel in node_cycles:
-        kernel_cycles = [cyc for cyc in node_cycles[kernel].values() if cyc != None]
-        kernel_cycles.append(0)
-        kernel_latencies[kernel] = max(kernel_cycles)
-
-    return kernel_latencies
-
 
 def flush_cycles(graph):
     for io in graph.get_input_ios():
-        if graph.get_node(io).kernel == "io1in_reset":
+        if io.kernel == "io1in_reset":
             break
-    assert graph.get_node(io).kernel == "io1in_reset"
+    assert io.kernel == "io1in_reset"
     flush_cycles = {}
 
     for mem in graph.get_mems():
-        for curr_node in graph.sources[mem]:
-            if curr_node.port == "flush":
+        for parent_node in graph.sources[mem]:
+            if parent_node.port == "flush":
                 break
-        if curr_node.port != "flush":
+        if parent_node.port != "flush":
             continue
         
+        curr_node = mem
         flush_cycles[mem] = 0
-        while curr_node != io:
-            if isinstance(curr_node, RouteNode) and graph.node_latencies[curr_node] != 0:
-                flush_cycles[mem] += graph.node_latencies[curr_node]
-            curr_node = graph.sources[curr_node][0]
+        while parent_node != io:
+            if isinstance(curr_node, TileNode):
+                flush_cycles[mem] += curr_node.input_port_latencies[parent_node.port]
+            curr_node = parent_node
+            parent_node = graph.sources[parent_node][0]
 
     return flush_cycles
 

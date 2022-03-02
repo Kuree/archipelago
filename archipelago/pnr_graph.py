@@ -25,7 +25,7 @@ class RouteNode:
             f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
         assert self.tile_id is not None
 
-        self.route_type = RouteType.SB
+        self.route_type = route_type
         assert self.route_type is not None
 
         self.track = track
@@ -525,9 +525,9 @@ class KernelNode:
 
     def __repr__(self):
         if self.kernel:
-            return f"{self.kernel} {self.type_} {self.latency} {self.flush_latency}"
+            return f"{self.kernel}"
         else:
-            return f"{self.mem_id} {self.type_} {self.latency} {self.flush_latency}"
+            return f"{self.mem_id}"
 
 
 class KernelGraph:
@@ -538,6 +538,7 @@ class KernelGraph:
         self.outputs: List[KernelNode] = []
         self.sources: Dict[KernelNode, List[KernelNode]] = {}
         self.sinks: Dict[KernelNode, List[KernelNode]] = {}
+        self.tile_id_to_tile: Dict[str, KernelNode] = {}
 
     def is_reachable(self, source, dest):
         visited = set()
@@ -561,6 +562,8 @@ class KernelGraph:
     def add_node(self, node: KernelNode):
         if node not in self.nodes:
             self.nodes.append(node)
+
+        self.tile_id_to_tile[str(node)] = node
 
     def add_edge(self, node1, node2):
         assert node1 in self.nodes, f"{node1} not in nodes"
@@ -771,7 +774,7 @@ def construct_kernel_graph(graph, new_latencies):
                                 visited.add(node)
 
                 if reachable:
-                    kernel_graph.add_edge(source, dest)
+                    kernel_graph.add_edge(kernel_graph.tile_id_to_tile[source_id], kernel_graph.tile_id_to_tile[dest_id])
 
     kernel_graph.update_sources_and_sinks()
     
