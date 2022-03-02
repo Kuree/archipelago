@@ -159,35 +159,27 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
 
     for node in nodes:
         cycles = set()
-        g_node = graph.get_node(node)
-
 
         if len(graph.sources[node]) == 0:
-            cycles = {0}
+            if node in graph.get_pes():
+                cycles = {None}
+            else:
+                cycles = {0}
 
         for parent in graph.sources[node]:
-            g_parent = graph.get_node(parent)
-            if parent not in node_cycles:
+            if parent not in node_cycles[node.kernel]:
                 c = 0
             else:
-                c = node_cycles[parent]
+                c = node_cycles[node.kernel][parent]
             
-            if g_node.type_ == "route":
-                if graph.node_latencies[node] != 0:
-                    if len(graph.sinks[node]) > 0:
-                        child = graph.sinks[node][0]
-                        if (child not in id_to_name or "d_reg_" not in id_to_name[child]) and (parent not in graph.get_mems()):
-                            if c != None: 
-                                c += graph.node_latencies[node]
-            if parent not in graph.get_mems():
-                cycles.add(c)
-        
-  
-        if (node in graph.get_pes() and len(graph.sources[node]) == 0) or (g_node.type_ == "route" and g_node.port == "flush"):
-            cycles = {None}
+            if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
+                c += node.input_port_latencies[parent.port]
+             
+            cycles.add(c)
   
         if None in cycles:
             cycles.remove(None)
+  
         if len(graph.sources[node]) > 1 and len(cycles) > 1:
             print(f"Something went wrong, incorrect node delay: {node} {cycles}")
 
@@ -504,7 +496,7 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     # branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
     # print("\nChecking delay matching all nodes")
-    # branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
+    branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
     # compute_latencies = get_compute_unit_cycles(graph, id_to_name, placement, routing)
     # flush_latencies = flush_cycles(graph)
