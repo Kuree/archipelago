@@ -481,6 +481,43 @@ class RoutingResultGraph:
             
         g.render(filename=filename)
 
+    def print_graph_tiles_only(self, filename):
+        g = Digraph()
+        for source in self.get_tiles():
+            if source[0] == 'r':
+                g.node(source, label = f"{source}\n{source.kernel}", shape='box')
+            else:
+                g.node(source, label = f"{source}\n{source.kernel}")
+            for dest in self.get_tiles():
+                reachable = False
+                visited = set()
+                queue = []
+                queue.append(source)
+                visited.add(source)
+                while queue:
+                    n = queue.pop()
+
+                    if n == dest and n != source:
+                        reachable = True
+
+                    for node in self.sinks[n]:
+                        if node not in visited:
+                            if isinstance(node, TileNode)
+                                if node == dest:
+                                    reachable = True
+                            else:
+                                queue.append(node)
+                                visited.add(node)
+
+                if reachable:
+                    if source.net_id != None:
+                        net_id = source.net_id
+                    else:
+                        net_id = dest.net_id
+                    g.edge(source, dest, label=net_id)
+            
+        g.render(filename=filename)
+
 def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
