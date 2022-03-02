@@ -174,8 +174,10 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
             
             if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
                 c += node.input_port_latencies[parent.port]
-             
-            cycles.add(c)
+            
+            # Flush signals shouldn't be considered here
+            if "reset" not in node.kernel:
+                cycles.add(c)
   
         if None in cycles:
             cycles.remove(None)
