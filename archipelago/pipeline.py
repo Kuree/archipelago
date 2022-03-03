@@ -339,15 +339,15 @@ def calculate_latencies(kernel_graph, kernel_latencies):
     flush_latencies = {}
 
     for node in kernel_graph.nodes:
-        if kernel_graph.get_node(node).type_ != "mem":
-            new_latencies[node] = kernel_graph.get_node(node).latency
-        else:
-            flush_latencies[node] = kernel_graph.get_node(node).flush_latency
-            
+        if node.kernel_type == KernelNodeType.MEM:
+            flush_latencies[node] = node.flush_latency
+        else: 
+            new_latencies[node] = node.latency
+    
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
     sorted_new_latencies = {}
-    for k in sorted(new_latencies, key=len,):
-        sorted_new_latencies[k] = new_latencies[k]
+    for k in sorted(new_latencies, key=lambda a: len(str(a))):
+        sorted_new_latencies[str(k)] = new_latencies[k]
     for kernel, lat in kernel_latencies.items():
         if "glb" in kernel:
             continue
@@ -366,7 +366,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                 new_lat = sorted_new_latencies[f_kernel]
             else:
                 for f_kernel, lat in sorted_new_latencies.items():
-                    if kernel in f_kernel:
+                    if kernel in str(f_kernel):
                         new_lat = sorted_new_latencies[f_kernel]
                         break
                 if kernel not in f_kernel:
@@ -389,23 +389,20 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     print("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
-    # compute_latencies = get_compute_unit_cycles(graph, id_to_name, placement, routing)
-    # flush_latencies = flush_cycles(graph)
-    # kernel_graph = construct_kernel_graph(graph, compute_latencies, flush_latencies)
-
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "flush_latencies")
     pond_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "pond_latencies")
 
     assert os.path.exists(kernel_latencies_file)
 
-    # f = open(kernel_latencies_file, "r")
-    # kernel_latencies = json.load(f)
+    f = open(kernel_latencies_file, "r")
+    existing_kernel_latencies = json.load(f)
 
-    # kernel_latencies = calculate_latencies(kernel_graph, kernel_latencies)
+    matched_kernel_latencies = calculate_latencies(kernel_graph, existing_kernel_latencies)
 
-    # flush_latencies = {id_to_name[mem_id]: latency for mem_id, latency in flush_latencies.items()}
-    # pond_latencies = {}
+    matched_flush_latencies = {id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()}
+    
+    pond_latencies = {}
     # for pond_node, latency in graph.node_latencies.items():
     #     g_pond_node = graph.get_node(pond_node)
     #     if g_pond_node.port == "data_in_pond":
@@ -415,14 +412,14 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
     #     if "input" in kernel:
     #          kernel_latencies[kernel] = 0
 
-    # fout = open(kernel_latencies_file, "w")
-    # fout.write(json.dumps(kernel_latencies))
+    fout = open(kernel_latencies_file, "w")
+    fout.write(json.dumps(matched_kernel_latencies))
 
-    # fout = open(flush_latencies_file, "w")
-    # fout.write(json.dumps(flush_latencies))
+    fout = open(flush_latencies_file, "w")
+    fout.write(json.dumps(matched_flush_latencies))
 
-    # fout = open(pond_latencies_file, "w")
-    # fout.write(json.dumps(pond_latencies))
+    fout = open(pond_latencies_file, "w")
+    fout.write(json.dumps(pond_latencies))
 
 
 def segment_node_to_string(node):
