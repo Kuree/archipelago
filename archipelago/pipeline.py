@@ -7,7 +7,7 @@ import glob
 import json
  
 from typing import Dict, List, NoReturn, Tuple, Set
-from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_graph, construct_kernel_graph, TileType, RouteType, TileNode, RouteNode
+from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_graph, construct_kernel_graph, TileType, RouteType, TileNode, RouteNode, segment_to_node
 from archipelago.sta import sta
 
 def find_break_idx(graph, crit_path):
@@ -18,7 +18,7 @@ def find_break_idx(graph, crit_path):
         raise ValueError("Can't find available register on critical path")
 
     while True:
-        if graph.get_node(crit_path[break_idx + 1][0]).route_type == "RMUX" and graph.get_node(crit_path[break_idx][0]).route_type == "SB":
+        if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and crit_path[break_idx][0].route_type == RouteType.SB:
             return break_idx
         break_idx += 1
 
@@ -26,7 +26,7 @@ def find_break_idx(graph, crit_path):
             break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
 
             while True:
-                if graph.get_node(crit_path[break_idx + 1][0]).route_type == "RMUX" and graph.get_node(crit_path[break_idx][0]).route_type == "SB":
+                if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and crit_path[break_idx][0].route_type == RouteType.SB:
                     return break_idx
                 break_idx -= 1
 
@@ -46,21 +46,19 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
 
     break_node_source = crit_path[break_idx][0]
     break_node_dest = graph.sinks[break_node_source][0]
-    g_break_node_source = graph.get_node(break_node_source)
-    g_break_node_dest = graph.get_node(break_node_dest)
 
-    assert g_break_node_source.type_ == "route" 
-    assert g_break_node_source.route_type == "SB" 
-    assert g_break_node_dest.type_ == "route" 
-    assert g_break_node_dest.route_type == "RMUX"
+    assert isinstance(break_node_source, RouteNode)
+    assert break_node_source.route_type == RouteType.SB
+    assert isinstance(break_node_dest, RouteNode)
+    assert break_node_dest.route_type == RouteType.RMUX
 
-    x = g_break_node_source.x
-    y = g_break_node_source.y
-    track = g_break_node_source.track
-    bw = g_break_node_source.bit_width
-    net_id = g_break_node_source.net_id
-    kernel = g_break_node_source.kernel
-    side = g_break_node_source.side
+    x = break_node_source.x
+    y = break_node_source.y
+    track = break_node_source.track
+    bw = break_node_source.bit_width
+    net_id = break_node_source.net_id
+    kernel = break_node_source.kernel
+    side = break_node_source.side
     print("\t\tBreaking net:", net_id, "Kernel:", kernel)
     
     dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
@@ -70,16 +68,16 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     new_reg_route_source.reg = True
     new_reg_route_source.update_tile_id()
     new_reg_route_dest = segment_to_node(new_segment, net_id)
-    new_reg_tile = Node("tile", x, y, tile_id=f"r_ADDED{graph.added_regs}", kernel = kernel)
+    new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
     graph.added_regs += 1
     
     graph.edges.remove((break_node_source, break_node_dest))
     graph.add_node(new_reg_route_source)
-    graph.node_latencies[new_reg_route_source.tile_id] = 1
+    # graph.node_latencies[new_reg_route_source.tile_id] = 1
     graph.add_node(new_reg_tile)
-    graph.node_latencies[new_reg_tile.tile_id] = 0
+    # graph.node_latencies[new_reg_tile.tile_id] = 0
     graph.add_node(new_reg_route_dest)
-    graph.node_latencies[new_reg_route_dest.tile_id] = 0
+    # graph.node_latencies[new_reg_route_dest.tile_id] = 0
     
 
     graph.add_edge(break_node_source, new_reg_route_source)
@@ -87,7 +85,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     graph.add_edge(new_reg_tile, new_reg_route_dest)
     graph.add_edge(new_reg_route_dest, break_node_dest)
 
-    reg_into_route(routes, g_break_node_source, new_reg_route_source)
+    reg_into_route(routes, break_node_source, new_reg_route_source)
     placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
     id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
 
@@ -223,8 +221,8 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
         if len(cycles) > 1:
             print(f"\tIncorrect delay within kernel: {node.kernel} {node} {cycles}")
             print(f"\tFixing branching delays at: {node} {cycles}") 
-            # source_cycles = [node_cycles[node.kernel][source] for source in graph.sources[node] if node_cycles[node.kernel][source] != None]
-            # max_parent_cycles = max(source_cycles)
+            source_cycles = [node_cycles[node.kernel][source] for source in graph.sources[node] if node_cycles[node.kernel][source] != None]
+            max_parent_cycles = max(source_cycles)
             # for parent in graph.sources[node]:
             #     if node_cycles[node.kernel][parent] != max_parent_cycles:
             #         for _ in range(max_parent_cycles - node_cycles[node.kernel][parent]):
@@ -541,6 +539,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
     graph.print_graph_tiles_only("pnr_graph_tile")
 
     curr_freq, crit_path, crit_nets = sta(graph)
+    break_crit_path(graph, id_to_name, crit_path, placement, routing)
     update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
 
     # dump_routing_result(app_dir, routing) 
