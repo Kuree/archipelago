@@ -7,7 +7,7 @@ import glob
 import json
  
 from typing import Dict, List, NoReturn, Tuple, Set
-from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_graph, construct_kernel_graph, TileType, RouteType, TileNode, RouteNode, segment_to_node
+from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_graph, construct_kernel_graph, TileType, RouteType, TileNode, RouteNode
 from archipelago.sta import sta
 
 def find_break_idx(graph, crit_path):
@@ -64,21 +64,21 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
     new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
-    new_reg_route_source = segment_to_node(new_segment, net_id)
+    new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
     new_reg_route_source.reg = True
     new_reg_route_source.update_tile_id()
-    new_reg_route_dest = segment_to_node(new_segment, net_id)
+    new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
     new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
+
+    new_reg_tile.input_port_latencies["reg"] = 1
+    new_reg_tile.input_port_break_path["reg"] = True
+
     graph.added_regs += 1
     
     graph.edges.remove((break_node_source, break_node_dest))
     graph.add_node(new_reg_route_source)
-    # graph.node_latencies[new_reg_route_source.tile_id] = 1
     graph.add_node(new_reg_tile)
-    # graph.node_latencies[new_reg_tile.tile_id] = 0
     graph.add_node(new_reg_route_dest)
-    # graph.node_latencies[new_reg_route_dest.tile_id] = 0
-    
 
     graph.add_edge(break_node_source, new_reg_route_source)
     graph.add_edge(new_reg_route_source, new_reg_tile)
@@ -542,8 +542,8 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
     break_crit_path(graph, id_to_name, crit_path, placement, routing)
     update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
 
-    # dump_routing_result(app_dir, routing) 
-    # dump_placement_result(app_dir, placement, id_to_name)
-    # dump_id_to_name(app_dir, id_to_name)
+    dump_routing_result(app_dir, routing) 
+    dump_placement_result(app_dir, placement, id_to_name)
+    dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name

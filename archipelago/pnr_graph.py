@@ -22,7 +22,7 @@ class RouteNode:
         
         self.tile_id = f"{route_type or 0},{x or 0},{y or 0},"+\
             f"{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},"+\
-            f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg}"
+            f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg},{kernel}"
         assert self.tile_id is not None
 
         self.route_type = route_type
@@ -40,12 +40,12 @@ class RouteNode:
         self.kernel = kernel
 
     def update_tile_id(self):
-        self.tile_id = f"{self.type_ or 0},{self.route_type or 0},"+\
+        self.tile_id = f"{self.route_type or 0},"+\
                         f"{self.x or 0},{self.y or 0},{self.track or 0},"+\
                         f"{self.side or 0},{self.io or 0},"+\
                         f"{self.bit_width or 0},{self.port or 0},"+\
                         f"{self.net_id or 0},{self.reg_name or 0},"+\
-                        f"{self.rmux_name or 0},{self.reg}"
+                        f"{self.rmux_name or 0},{self.reg},{self.kernel}"
         assert self.tile_id is not None
 
     def to_route(self):
@@ -65,11 +65,12 @@ class RouteNode:
             raise ValueError("Unrecognized route type")
         return route_string
 
-    def __repr__(self):
+    def __str__(self):
+        self.update_tile_id()
         return f"{self.tile_id}"
 
-    def __eq__(self, other):
-        return self.tile_id == other.tile_id
+    # def __eq__(self, other):
+    #     return self.tile_id == other.tile_id
 
     def __hash__(self):
         return hash(self.tile_id)
@@ -108,11 +109,14 @@ class TileNode:
         self.input_port_latencies = {}
         self.input_port_break_path = {}
 
-    def __repr__(self):
+    def update_tile_id(self):
+        pass
+
+    def __str__(self):
         return f"{self.tile_id}"
 
-    def __eq__(self, other):
-        return self.tile_id == other.tile_id
+    # def __eq__(self, other):
+    #     return self.tile_id == other.tile_id
 
     def __hash__(self):
         return hash(self.tile_id)
@@ -291,7 +295,7 @@ class RoutingResultGraph:
         return False
 
     def add_node(self, node):
-        if node not in self.nodes:
+        if node not in self.nodes and str(node) not in [str(gnode) for gnode in self.nodes]:
             self.nodes.append(node)
         if isinstance(node, TileNode):
             self.tile_id_to_tile[node.tile_id] = node
@@ -319,6 +323,8 @@ class RoutingResultGraph:
     def update_sources_and_sinks(self):
         self.inputs = []
         self.outputs = []
+        self.sources = {}
+        self.sinks = {}
 
         for node in self.nodes:
             self.sources[node] = []
@@ -389,25 +395,29 @@ class RoutingResultGraph:
                     return True
         return False
 
-    def segment_to_node(self, segment, net_id):
+    def segment_to_node(self, segment, net_id, kernel=None):
         if segment[0] == "SB":
             track, x, y, side, io_, bit_width = segment[1:]
             node = RouteNode(x, y, route_type=RouteType.SB, track=track,
-                        side=side, io=io_, bit_width=bit_width, net_id=net_id)
+                        side=side, io=io_, bit_width=bit_width, net_id=net_id, kernel=kernel)
         elif segment[0] == "PORT":
             port_name, x, y, bit_width = segment[1:]
             node = RouteNode(x, y, route_type=RouteType.PORT,
-                        bit_width=bit_width, net_id=net_id, port=port_name)
+                        bit_width=bit_width, net_id=net_id, port=port_name, kernel=kernel)
         elif segment[0] == "REG":
             reg_name, track, x, y, bit_width = segment[1:]
             node = RouteNode(x, y, route_type=RouteType.REG, track=track,
-                        bit_width=bit_width, net_id=net_id, reg_name=reg_name, port="reg")
+                        bit_width=bit_width, net_id=net_id, reg_name=reg_name, port="reg", kernel=kernel)
         elif segment[0] == "RMUX":
             rmux_name, x, y, bit_width = segment[1:]
             node = RouteNode(x, y, route_type=RouteType.RMUX,
-                        bit_width=bit_width, net_id=net_id, rmux_name=rmux_name)
+                        bit_width=bit_width, net_id=net_id, rmux_name=rmux_name, kernel=kernel)
         else:
             raise ValueError("Unrecognized route type")
+
+        for gnode in self.nodes:
+            if str(node) == str(gnode):
+                return gnode
         return node
 
     def gen_placement(self, placement, netlist):
@@ -442,31 +452,24 @@ class RoutingResultGraph:
         return None
 
     def update_edge_kernels(self):
-        for in_node in self.inputs:
-            queue = []
-            visited = set()
-            kernel = in_node.kernel
-            queue.append(in_node)
-            visited.add(in_node)
-            while queue:
-                n = queue.pop()
-                kernel = n.kernel
+        nodes = self.topological_sort()
+        
+        for in_node in nodes:
+            assert in_node.kernel is not None
+            for node in self.sinks[in_node]:
+                if isinstance(node, RouteNode):
+                    node.kernel = in_node.kernel
+                else:
+                     assert node.kernel is not None
 
-                for node in self.sinks[n]:
-                    if node not in visited:
-                        queue.append(node)
-                        visited.add(node)
-                        if isinstance(node, RouteNode):
-                            node.kernel = kernel
-
-        for tile in self.get_tiles():
-            for source in self.sources[tile]:
-                source.kernel = tile.kernel
+        for node in self.nodes:
+            node.update_tile_id()
+            assert node.kernel is not None, node
 
     def print_graph(self, filename, edge_weights = False):
         g = Digraph()
         for node in self.nodes:
-            g.node(str(node), label = str(node))
+            g.node(str(node), label = f"{node}\n{node.kernel}")
 
         for edge in self.edges:
             g.edge(str(edge[0]), str(edge[1]))
@@ -492,6 +495,8 @@ class RoutingResultGraph:
                     if n == dest and n != source:
                         reachable = True
 
+                    if n not in self.sinks:
+                        breakpoint()
                     for node in self.sinks[n]:
                         if node not in visited:
                             if isinstance(node, TileNode):
@@ -523,7 +528,7 @@ class KernelNode:
         self.flush_latency = flush_latency
         self.has_shift_regs = has_shift_regs
 
-    def __repr__(self):
+    def __str__(self):
         if self.kernel:
             return f"{self.kernel}"
         else:
@@ -669,7 +674,18 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
                     tile_id = graph.get_reg_at(node2.x, node2.y)
                     graph.add_edge(node2, graph.get_tile(tile_id))
 
+    node_names = set()
+    for node in graph.nodes:
+        node_names.add(str(node))
+    assert len(node_names) == len(graph.nodes)
+
     graph.update_sources_and_sinks()
+
+    node_names = set()
+    for node in graph.nodes:
+        node_names.add(str(node))
+    assert len(graph.sources) == len(node_names)
+    assert len(graph.sinks) == len(node_names)
 
     id_to_input_ports = {}
     for net_id, conns in netlist.items():
@@ -706,7 +722,21 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
                     tile.input_port_latencies[port] = 0
                     tile.input_port_break_path[port] = False
 
+    node_names = set()
+    for node in graph.nodes:
+        assert node not in node_names
+        node_names.add(str(node))
+
     graph.update_edge_kernels()
+    graph.update_sources_and_sinks()
+
+    node_names = set()
+    for node in graph.nodes:
+        node_names.add(str(node))
+        assert node in graph.sinks
+        assert node in graph.sources
+    assert len(graph.sources) == len(node_names)
+    assert len(graph.sinks) == len(node_names)
 
     while graph.fix_cycles():
         pass
@@ -777,5 +807,5 @@ def construct_kernel_graph(graph, new_latencies):
                     kernel_graph.add_edge(kernel_graph.tile_id_to_tile[source_id], kernel_graph.tile_id_to_tile[dest_id])
 
     kernel_graph.update_sources_and_sinks()
-    
+
     return kernel_graph
