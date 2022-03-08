@@ -338,20 +338,29 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
 
 def calculate_latencies(kernel_graph, kernel_latencies):
 
+
     nodes = kernel_graph.topological_sort()
     new_latencies = {}
     flush_latencies = {}
 
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.MEM:
-            flush_latencies[node] = node.flush_latency
+            flush_latencies[node.mem_id] = node.flush_latency
         else: 
-            new_latencies[node] = node.latency
-    
+            new_latencies[node.kernel] = node.latency
+
+    for node16 in new_latencies:
+        for node1 in new_latencies:
+            if node16 != node1 and node16.split("_write")[0].replace("io16", "io1") == node1.split("_write")[0]:
+                print(f"Subtracting {node1} from {node16}")
+                new_latencies[node16] -= new_latencies[node1]
+                new_latencies[node1] = 0
+
+
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
     sorted_new_latencies = {}
     for k in sorted(new_latencies, key=lambda a: len(str(a))):
-        sorted_new_latencies[str(k)] = new_latencies[k]
+        sorted_new_latencies[k] = new_latencies[k]
     for kernel, lat in kernel_latencies.items():
         if "glb" in kernel:
             continue
@@ -385,6 +394,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
     kernel_latencies = branch_delay_match_within_kernels(graph, id_to_name, placement, routing)
         
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
+
+    kernel_graph.print_graph("kernel_graph")
 
     print("\nBranch delay matching kernels")
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
@@ -488,52 +499,10 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
         if os.path.isfile(id_to_name_filename):
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
-    # import copy
-    # placement_save = copy.deepcopy(placement)
-    # routing_save = copy.deepcopy(routing)
-    # id_to_name_save = copy.deepcopy(id_to_name)
-
-    # routing_result_graph = construct_graph(placement, routing, id_to_name, netlist)
-
-    # max_itr = None 
-    # curr_freq = 0
-    # itr = 0
-    # curr_freq, crit_path, crit_nets = sta(graph)
-    # while max_itr == None:
-    #     try:
-    #         kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-    #         break_crit_path(graph, id_to_name, crit_path, placement, routing)
-    #         curr_freq, crit_path, crit_nets = sta(graph)
-    #         graph.regs = None
-    #         kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-    #     except:
-    #         max_itr = itr
-    #     itr += 1
-
-    # id_to_name = id_to_name_save
-    # placement = placement_save
-    # routing = routing_save
-    # graph = construct_graph(placement, routing, id_to_name)
-    # verify_graph(graph)
-    # curr_freq, crit_path, crit_nets = sta(graph)
-
-    # for _ in range(max_itr):
-    #     break_crit_path(graph, id_to_name, crit_path, placement, routing)
-    #     curr_freq, crit_path, crit_nets = sta(graph)
-
-    # graph.regs = None
-
-    # kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
-
-    # freq_file = os.path.join(app_dir, "design.freq")
-    # fout = open(freq_file, "w")
-    # fout.write(f"{curr_freq}\n")
-
-    # dump_routing_result(app_dir, routing) 
-    # dump_placement_result(app_dir, placement, id_to_name)
-    # dump_id_to_name(app_dir, id_to_name)
-
-    # visualize_pnr(graph, crit_nets)
+    import copy
+    placement_save = copy.deepcopy(placement)
+    routing_save = copy.deepcopy(routing)
+    id_to_name_save = copy.deepcopy(id_to_name)
 
     if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
         pe_cycles = 1
@@ -541,16 +510,60 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
         pe_cycles = 0
 
     graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
-    
-    graph.print_graph("pnr_graph")
-    graph.print_graph_tiles_only("pnr_graph_tile")
 
+    max_itr = 0
+    curr_freq = 0
+    itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
-    break_crit_path(graph, id_to_name, crit_path, placement, routing)
+    while max_itr == None:
+        try:
+            kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
+            break_crit_path(graph, id_to_name, crit_path, placement, routing)
+            curr_freq, crit_path, crit_nets = sta(graph)
+            graph.regs = None
+            kernel_latencies = update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
+        except:
+            max_itr = itr
+        itr += 1
+
+    id_to_name = id_to_name_save
+    placement = placement_save
+    routing = routing_save
+    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
+    curr_freq, crit_path, crit_nets = sta(graph)
+
+    for _ in range(max_itr):
+        break_crit_path(graph, id_to_name, crit_path, placement, routing)
+        curr_freq, crit_path, crit_nets = sta(graph)
+
     update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
+
+    freq_file = os.path.join(app_dir, "design.freq")
+    fout = open(freq_file, "w")
+    fout.write(f"{curr_freq}\n")
 
     dump_routing_result(app_dir, routing) 
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
+
+    # visualize_pnr(graph, crit_nets)
+
+    # if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+    #     pe_cycles = 1
+    # else:
+    #     pe_cycles = 0
+
+    # graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
+    
+    # graph.print_graph("pnr_graph")
+    # graph.print_graph_tiles_only("pnr_graph_tile")
+
+    # curr_freq, crit_path, crit_nets = sta(graph)
+    # break_crit_path(graph, id_to_name, crit_path, placement, routing)
+    # update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
+
+    # dump_routing_result(app_dir, routing) 
+    # dump_placement_result(app_dir, placement, id_to_name)
+    # dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name
