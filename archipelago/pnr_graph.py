@@ -466,6 +466,36 @@ class RoutingResultGraph:
             node.update_tile_id()
             assert node.kernel is not None, node
 
+    def get_output_tiles_of_kernel(self, kernel):
+        kernel_nodes = set()
+        for node in self.tiles:
+            if node.kernel == kernel:
+                kernel_nodes.add(node)
+
+        kernel_output_nodes = set()
+
+        for source in kernel_nodes:
+            visited = set()
+            queue = []
+
+            queue.append(source)
+            visited.add(source)
+
+            while queue:
+                n = queue.pop()
+
+                if isinstance(n, TileNode) and n.kernel != kernel:
+                    kernel_output_nodes.add(source)
+                    break
+                elif n != source and isinstance(n, TileNode):
+                    continue
+
+                for node in self.sinks[n]:
+                    if node not in visited:
+                        queue.append(node)
+                        visited.add(node)
+        return kernel_output_nodes
+
     def print_graph(self, filename, edge_weights = False):
         g = Digraph()
         for node in self.nodes:

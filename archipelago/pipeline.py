@@ -92,47 +92,32 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
 
-def pipeline_input_ios(graph, num_stages, id_to_name, placement, routing):
-    for _ in range(num_stages):
-        for io_node in graph.get_input_ios():
-            if "reset" in graph.get_node(io_node).kernel:
-                continue
-            path = []
-            curr_node = io_node
-            idx = 0
-            while curr_node not in graph.get_mems() and len(graph.sinks[curr_node]) < 2:
-                assert len(graph.sinks[curr_node]) == 1, len(graph.sinks[curr_node])
-                path.append((curr_node, idx))
-                curr_node = graph.sinks[curr_node][0]
-                idx += 1
-            break_crit_path(graph, id_to_name, path, placement, routing)
-
 def break_at(graph, node1, id_to_name, placement, routing):    
     path = []
     curr_node = node1
-    kernel = graph.get_node(curr_node).kernel
+    kernel = curr_node.kernel
 
     while len(graph.sinks[curr_node]) == 1:
-        if len(graph.sources[graph.sinks[curr_node][0]]) > 1 or graph.get_node(graph.sinks[curr_node][0]).kernel != kernel:
+        if len(graph.sources[graph.sinks[curr_node][0]]) > 1 or graph.sinks[curr_node][0].kernel != kernel:
             break
         curr_node = graph.sinks[curr_node][0]
 
     idx = 0
     while len(graph.sources[curr_node]) == 1:
-        if len(graph.sinks[curr_node]) > 1 or graph.get_node(graph.sources[curr_node][0]).kernel != kernel:
+        if len(graph.sinks[curr_node]) > 1 or graph.sources[curr_node][0].kernel != kernel:
             break
         path.append((curr_node, idx))
         curr_node = graph.sources[curr_node][0]
         if curr_node in graph.get_ponds():
             break
     
-    if curr_node in graph.get_ponds():        
-        print("\t\tFound pond for branch delay matching", curr_node)
-        for source in graph.sources[curr_node]:
-            if graph.get_node(source).port == "flush":
-                continue
-            graph.node_latencies[source] += 1
-        return
+    # if curr_node in graph.get_ponds():
+    #     print("\t\tFound pond for branch delay matching", curr_node)
+    #     for source in graph.sources[curr_node]:
+    #         if graph.get_node(source).port == "flush":
+    #             continue
+    #         graph.node_latencies[source] += 1
+    #     return
 
     if len(path) == 0:
         raise ValueError(f"Cant break at node: {node1}")
@@ -181,7 +166,7 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
             cycles.remove(None)
   
         if len(graph.sources[node]) > 1 and len(cycles) > 1:
-            print(f"Something went wrong, incorrect node delay: {node} {cycles}")
+            print(f"Incorrect node delay: {node} {cycles}")
 
         if len(cycles) > 0:
             node_cycles[node] = max(cycles)
@@ -223,10 +208,10 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             print(f"\tFixing branching delays at: {node} {cycles}") 
             source_cycles = [node_cycles[node.kernel][source] for source in graph.sources[node] if node_cycles[node.kernel][source] != None]
             max_parent_cycles = max(source_cycles)
-            # for parent in graph.sources[node]:
-            #     if node_cycles[node.kernel][parent] != max_parent_cycles:
-            #         for _ in range(max_parent_cycles - node_cycles[node.kernel][parent]):
-            #             break_at(graph, graph.sources[parent][0], id_to_name, placement, routing)
+            for parent in graph.sources[node]:
+                if node_cycles[node.kernel][parent] != max_parent_cycles:
+                    for _ in range(max_parent_cycles - node_cycles[node.kernel][parent]):
+                        break_at(graph, graph.sources[parent][0], id_to_name, placement, routing)
 
         if len(cycles) > 0:
             node_cycles[node.kernel][node] = max(cycles)
@@ -244,12 +229,12 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
 
             if len(kernel_output_delays) > 1:
                 print(f"\tIncorrect delay at output of kernel: {kernel} {kernel_output_delays}")
-                # max_parent_cycles = max(kernel_output_delays)
-                # for node, delay in kernel_output_nodes_and_delays:
-                #     if delay != max_parent_cycles:
-                #         print(f"\tFixing branching delays at: {node} {max_parent_cycles - delay}") 
-                #         for _ in range(max_parent_cycles - delay):
-                #             break_at(graph, node, id_to_name, placement, routing)
+                max_parent_cycles = max(kernel_output_delays)
+                for node, delay in kernel_output_nodes_and_delays:
+                    if delay != max_parent_cycles:
+                        print(f"\tFixing branching delays at: {node} {max_parent_cycles - delay}") 
+                        for _ in range(max_parent_cycles - delay):
+                            break_at(graph, node, id_to_name, placement, routing)
 
     kernel_latencies = {}
     for kernel in node_cycles:
@@ -258,8 +243,6 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
         kernel_latencies[kernel] = max(kernel_cycles)
 
     return kernel_latencies
-
-
 
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
     nodes = kernel_graph.topological_sort()
@@ -292,24 +275,22 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
         if len(kernel_graph.sources[node]) > 1 and len(cycles) > 1:
             print(f"\tIncorrect kernel delay: {node} {cycles}")
             
-            # source_cycles = [node_cycles[source] for source in kernel_graph.sources[node] if node_cycles[source] != None]
-            # max_cycle = max(source_cycles)
-            # for source in kernel_graph.sources[node]:
-            #     if node_cycles[source] != None and node_cycles[source] != max_cycle:
-            #         print(f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}")
-            #         add_delay_to_kernel(graph, source, max_cycle - node_cycles[source], id_to_name, placement, routing)
+            source_cycles = [node_cycles[source] for source in kernel_graph.sources[node] if node_cycles[source] != None]
+            max_cycle = max(source_cycles)
+            for source in kernel_graph.sources[node]:
+                if node_cycles[source] != None and node_cycles[source] != max_cycle:
+                    print(f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}")
+                    add_delay_to_kernel(graph, source.kernel, max_cycle - node_cycles[source], id_to_name, placement, routing)
         if len(cycles) > 0:
             node_cycles[node] = max(cycles)
         else:
             node_cycles[node] = None
 
-
-
 def flush_cycles(graph, harden_flush, pipeline_config_interval):
     if harden_flush:
         flush_cycles = {}
         for mem in graph.get_mems():
-            flush_cycles[mem] = mem.y//pipeline_config_interval
+            flush_cycles[mem] = mem.y//(pipeline_config_interval + 1)
 
     else:
         for io in graph.get_input_ios():
@@ -335,10 +316,7 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
 
     return flush_cycles
 
-
 def calculate_latencies(kernel_graph, kernel_latencies):
-
-
     nodes = kernel_graph.topological_sort()
     new_latencies = {}
     flush_latencies = {}
@@ -424,10 +402,6 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
     #     if g_pond_node.port == "data_in_pond":
     #         pond_latencies[id_to_name[graph.sinks[pond_node][0]]] = latency
     
-    # for kernel, lat in kernel_latencies.items():
-    #     if "input" in kernel:
-    #          kernel_latencies[kernel] = 0
-
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(matched_kernel_latencies))
 
@@ -449,9 +423,7 @@ def segment_node_to_string(node):
         return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]})"
 
 def dump_routing_result(dir_name, routing):
-
     route_name = os.path.join(dir_name, "design.route")
-
     fout = open(route_name, "w")
 
     for net_id, route in routing.items():
@@ -463,7 +435,6 @@ def dump_routing_result(dir_name, routing):
             for node in segment:
                 fout.write(f"{segment_node_to_string(node)}\n")
         fout.write("\n")
-
 
 def dump_placement_result(dir_name, placement, id_to_name):
 
@@ -492,7 +463,6 @@ def load_id_to_name(id_filename):
 
     return id_to_name
      
-
 def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, harden_flush, pipeline_config_interval):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
@@ -545,25 +515,5 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     dump_routing_result(app_dir, routing) 
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
-
-    # visualize_pnr(graph, crit_nets)
-
-    # if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
-    #     pe_cycles = 1
-    # else:
-    #     pe_cycles = 0
-
-    # graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
-    
-    # graph.print_graph("pnr_graph")
-    # graph.print_graph_tiles_only("pnr_graph_tile")
-
-    # curr_freq, crit_path, crit_nets = sta(graph)
-    # break_crit_path(graph, id_to_name, crit_path, placement, routing)
-    # update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
-
-    # dump_routing_result(app_dir, routing) 
-    # dump_placement_result(app_dir, placement, id_to_name)
-    # dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name
