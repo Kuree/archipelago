@@ -305,27 +305,33 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
 
 
 
-def flush_cycles(graph):
-    for io in graph.get_input_ios():
-        if io.kernel == "io1in_reset":
-            break
-    assert io.kernel == "io1in_reset"
-    flush_cycles = {}
+def flush_cycles(graph, harden_flush, pipeline_config_interval):
+    if harden_flush:
+        flush_cycles = {}
+        for mem in graph.get_mems():
+            flush_cycles[mem] = mem.y//pipeline_config_interval
 
-    for mem in graph.get_mems():
-        for parent_node in graph.sources[mem]:
-            if parent_node.port == "flush":
+    else:
+        for io in graph.get_input_ios():
+            if io.kernel == "io1in_reset":
                 break
-        if parent_node.port != "flush":
-            continue
-        
-        curr_node = mem
-        flush_cycles[mem] = 0
-        while parent_node != io:
-            if isinstance(curr_node, TileNode):
-                flush_cycles[mem] += curr_node.input_port_latencies[parent_node.port]
-            curr_node = parent_node
-            parent_node = graph.sources[parent_node][0]
+        assert io.kernel == "io1in_reset"
+        flush_cycles = {}
+
+        for mem in graph.get_mems():
+            for parent_node in graph.sources[mem]:
+                if parent_node.port == "flush":
+                    break
+            if parent_node.port != "flush":
+                continue
+            
+            curr_node = mem
+            flush_cycles[mem] = 0
+            while parent_node != io:
+                if isinstance(curr_node, TileNode):
+                    flush_cycles[mem] += curr_node.input_port_latencies[parent_node.port]
+                curr_node = parent_node
+                parent_node = graph.sources[parent_node][0]
 
     return flush_cycles
 
@@ -373,12 +379,11 @@ def calculate_latencies(kernel_graph, kernel_latencies):
             kernel_latencies[kernel] = new_lat
     return kernel_latencies
 
-def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
+def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval):
     
     print("\nBranch delay matching within kernels")
     kernel_latencies = branch_delay_match_within_kernels(graph, id_to_name, placement, routing)
-
-    flush_latencies = flush_cycles(graph)
+        
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
     print("\nBranch delay matching kernels")
@@ -386,6 +391,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing):
 
     print("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
+
+    flush_latencies = flush_cycles(graph, harden_flush, pipeline_config_interval)
 
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace("compute_kernel_latencies", "flush_latencies")
@@ -475,7 +482,7 @@ def load_id_to_name(id_filename):
     return id_to_name
      
 
-def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
+def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, harden_flush, pipeline_config_interval):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
@@ -540,7 +547,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only):
 
     curr_freq, crit_path, crit_nets = sta(graph)
     break_crit_path(graph, id_to_name, crit_path, placement, routing)
-    update_kernel_latencies(app_dir, graph, id_to_name, placement, routing)
+    update_kernel_latencies(app_dir, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval)
 
     dump_routing_result(app_dir, routing) 
     dump_placement_result(app_dir, placement, id_to_name)
