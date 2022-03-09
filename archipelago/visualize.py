@@ -15,7 +15,7 @@ import pycyclone
 from pycyclone.io import load_placement
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
-
+from archipelago.sta import sta
 
 # Draw parameters
 GLOBAL_TILE_WIDTH = 200
@@ -315,7 +315,7 @@ def find_last_sb(routing_result_graph, node):
         return None
 
 def draw_used_routes(draw, routing_result_graph, width):
-    color = lambda : (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
+    color = lambda : (random.randint(0, 128), random.randint(0, 255), random.randint(0, 255), 255)
     net_colors = {}
 
     for node in routing_result_graph.get_routes():
@@ -342,6 +342,32 @@ def draw_used_routes(draw, routing_result_graph, width):
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
 
 
+def draw_crit_routes(draw, routing_result_graph, width, crit_nodes):
+    color = lambda : (255, 0, 0, 255)
+    net_colors = {}
+
+    for node in routing_result_graph.get_routes():
+        if node.route_type == RouteType.SB and node.bit_width == width and node in crit_nodes:
+            if node.net_id not in net_colors:
+                net_colors[node.net_id] = color()
+
+            source_port = False
+            sink_port = False
+            for source in routing_result_graph.sources[node]:
+                if isinstance(source, RouteNode) and source.route_type == RouteType.PORT:
+                    source_port = True
+            for sink in routing_result_graph.sinks[node]:
+                if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT:
+                    sink_port = True                
+
+            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=10, source_port=source_port, sink_port = sink_port)
+
+            last_sb = find_last_sb(routing_result_graph, node)
+
+            if last_sb:
+                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=10)
+        elif node.route_type == RouteType.REG and node.bit_width == width:
+            draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
 
 
 def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, width=2):
@@ -398,15 +424,13 @@ def draw_all_tiles(draw, graph):
                     draw_arrow_on_tile(draw, tile_x=x, tile_y=y, side=side.name, io=io, track_id=i%GLOBAL_NUM_TRACK)
 
 def draw_used_tiles(draw, graph):
-    tiles = graph.tile_id_to_tile
-    blk_id_list = list(tiles.keys())
-    blk_id_list.sort(key=lambda x: 0 if x[0] == "r" or x[0] == "i" else 1)
-    for blk_id in blk_id_list:
-        node = tiles[blk_id]
+    tiles = graph.get_tiles()
+    blk_id_list = {tile.tile_id:tile for tile in tiles}
+    for blk_id, node in blk_id_list.items():
         create_tile(draw=draw, x=node.x, y=node.y, tile_type=node.tile_type, tile_id=blk_id)
 
 
-def visualize_pnr(routing_graphs, routing_result_graph, crit_edges, app_dir):
+def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
 
     array_width = 0
     array_height = 0
@@ -416,7 +440,6 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_edges, app_dir):
     array_width += 1
     array_height += 1
 
-    routing_result_graph.print_graph("graph")
     
     for width, graph in routing_graphs.items():
         # initialize image
@@ -430,6 +453,9 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_edges, app_dir):
         draw_used_tiles(draw, routing_result_graph)
 
         draw_used_routes(draw, routing_result_graph, width)
+
+        if crit_nodes is not None:
+            draw_crit_routes(draw, routing_result_graph, width, crit_nodes)
 
         img.save(f'{app_dir}/pnr_result_{width}.png', format='PNG')
 
@@ -479,9 +505,11 @@ def main():
 
     routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
 
+    clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
+
     app_dir = os.path.dirname(packed_file)
 
-    visualize_pnr(routing_graphs, routing_result_graph, None, app_dir)
+    visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir)
 
 
 if __name__ == "__main__":

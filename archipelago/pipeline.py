@@ -43,6 +43,8 @@ def reg_into_route(routes, g_break_node_source, new_reg_route_source):
                 if g_break_node_source.to_route() == segment:
                     route.insert(idx + 1, new_reg_route_source.to_route())
                     return 
+    breakpoint()
+    assert False, f"Couldn't find segment {g_break_node_source.to_route()} in routing file"
 
 def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     break_idx = find_break_idx(graph, crit_path)
@@ -249,8 +251,6 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     return kernel_latencies
 
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
-    graph.print_graph_tiles_only("pnr_graph_tile")
-    kernel_graph.print_graph("kernel_graph")
     nodes = kernel_graph.topological_sort()
     node_cycles = {}
 
@@ -336,7 +336,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
     for node16 in new_latencies:
         for node1 in new_latencies:
             if node16 != node1 and node16.split("_write")[0].replace("io16", "io1") == node1.split("_write")[0]:
-                print(f"Subtracting {node1} from {node16}")
+                print(f"Subtracting {node1} {new_latencies[node1]} from {node16} {new_latencies[node16]}")
                 new_latencies[node16] -= new_latencies[node1]
                 new_latencies[node1] = 0
 
@@ -480,7 +480,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
 
-    max_itr = 0
+    max_itr = None
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -516,6 +516,8 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     dump_routing_result(app_dir, routing) 
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
+
+    graph.print_graph_tiles_only("pnr_graph_tile")
 
     return placement, routing, id_to_name
 

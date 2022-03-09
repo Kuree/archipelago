@@ -50,17 +50,13 @@ class RouteNode:
 
     def to_route(self):
         if self.route_type == RouteType.SB:
-            route_string = f"{self.route_type} ({self.track}, {self.x}, "+\
-                           f"{self.y}, {self.side}, {self.io}, {self.bit_width})"
+            route_string = ['SB', self.track, self.x, self.y, self.side, self.io, self.bit_width]
         elif self.route_type == RouteType.PORT:
-            route_string = f"{self.route_type} ({self.port}, {self.x}, "+\
-                           f"{self.y}, {self.bit_width})"
+            route_string = ['PORT', self.port, self.x, self.y, self.bit_width]
         elif self.route_type == RouteType.REG:
-            route_string = f"{self.route_type} ({self.reg_name}, {self.track}, "+\
-                           f"{self.x}, {self.y}, {self.bit_width})"
+            route_string = ['REG', self.reg_name, self.track, self.x, self.y, self.bit_width]
         elif self.route_type == RouteType.RMUX:
-            route_string = f"{self.route_type} ({self.rmux_name}, {self.x}, "+\
-                           f"{self.y}, {self.bit_width})"
+            route_string = ['RMUX', self.rmux_name, self.x, self.y, self.bit_width]
         else:
             raise ValueError("Unrecognized route type")
         return route_string
@@ -72,8 +68,8 @@ class RouteNode:
     # def __eq__(self, other):
     #     return self.tile_id == other.tile_id
 
-    def __hash__(self):
-        return hash(self.tile_id)
+    # def __hash__(self):
+    #     return hash(self.tile_id)
 
 class TileType(Enum):
     PE=1
@@ -118,8 +114,8 @@ class TileNode:
     # def __eq__(self, other):
     #     return self.tile_id == other.tile_id
 
-    def __hash__(self):
-        return hash(self.tile_id)
+    # def __hash__(self):
+    #     return hash(self.tile_id)
 
 class RoutingResultGraph:
     def __init__(self):
@@ -129,8 +125,8 @@ class RoutingResultGraph:
         self.edge_weights: Dict[(Union[RouteNode, TileNode], Union[RouteNode, TileNode]), int] = {}
         self.inputs: Set[Union[RouteNode, TileNode]] = set()
         self.outputs: Set[Union[RouteNode, TileNode]] = set()
-        self.sources: Dict[Union[RouteNode, TileNode], Set[Union[RouteNode, TileNode]]] = {}
-        self.sinks: Dict[Union[RouteNode, TileNode], Set[Union[RouteNode, TileNode]]] = {}
+        self.sources: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
+        self.sinks: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
         self.node_latencies: Dict[Union[RouteNode, TileNode], int] = {} 
         self.placement = {}
         self.id_to_ports = {}
@@ -309,12 +305,12 @@ class RoutingResultGraph:
         self.edges.add((node1, node2))
 
         if node2 not in self.sources:
-            self.sources[node2] = set()
-        self.sources[node2].add(node1)
+            self.sources[node2] = []
+        self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
-            self.sinks[node1] = set()
-        self.sinks[node1].add(node2)
+            self.sinks[node1] = []
+        self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = set()
@@ -323,20 +319,23 @@ class RoutingResultGraph:
         self.sinks = {}
 
         for node in self.nodes:
-            self.sources[node] = set()
-            self.sinks[node] = set()
+            self.sources[node] = []
+            self.sinks[node] = []
 
         for source, sink in self.edges:
+            assert source in self.nodes
+            assert sink in self.nodes
             assert isinstance(source, RouteNode) or isinstance(source, TileNode)
             assert isinstance(sink, RouteNode) or isinstance(sink, TileNode)
-            self.sources[sink].add(source)
-            self.sinks[source].add(sink)
+            self.sources[sink].append(source)
+            self.sinks[source].append(sink)
 
         for node in self.nodes:
             if len(self.sources[node]) == 0:
                 self.inputs.add(node)
             if len(self.sinks[node]) == 0:
                 self.outputs.add(node)
+
 
     def topological_sort(self):
         visited = set()
@@ -455,7 +454,7 @@ class RoutingResultGraph:
                 if isinstance(node, RouteNode):
                     node.kernel = in_node.kernel
                 else:
-                     assert node.kernel is not None
+                    assert node.kernel is not None
 
         for node in self.nodes:
             node.update_tile_id()
@@ -566,8 +565,8 @@ class KernelGraph:
         self.edges: Set[(KernelNode, KernelNode)] = set()
         self.inputs: Set[KernelNode] = set()
         self.outputs: Set[KernelNode] = set()
-        self.sources: Dict[KernelNode, Set[KernelNode]] = {}
-        self.sinks: Dict[KernelNode, Set[KernelNode]] = {}
+        self.sources: Dict[KernelNode, List[KernelNode]] = {}
+        self.sinks: Dict[KernelNode, List[KernelNode]] = {}
         self.tile_id_to_tile: Dict[str, KernelNode] = {}
 
     def is_reachable(self, source, dest):
@@ -604,25 +603,25 @@ class KernelGraph:
         self.edges.add((node1, node2))
 
         if node2 not in self.sources:
-            self.sources[node2] = set()
-        self.sources[node2].add(node1)
+            self.sources[node2] = []
+        self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
-            self.sinks[node1] = set()
-        self.sinks[node1].add(node2)
+            self.sinks[node1] = []
+        self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = set()
         self.outputs = set()
         for node in self.nodes:
-            self.sources[node] = set()
-            self.sinks[node] = set()
+            self.sources[node] = []
+            self.sinks[node] = []
         for node in self.nodes:
             for source, sink in self.edges:
                 if node == source:
-                    self.sources[sink].add(source)
+                    self.sources[sink].append(source)
                 elif node == sink:
-                    self.sinks[source].add(sink)
+                    self.sinks[source].append(sink)
         for node in self.nodes:
             if len(self.sources[node]) == 0:
                 self.inputs.add(node)
@@ -644,15 +643,15 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
-    def print_graph(self, filename):
-        g = Digraph()
-        for node in self.nodes:
-            g.node(str(node), label=f"{str(node)} {node.latency}")
+    # def print_graph(self, filename):
+    #     g = Digraph()
+    #     for node in self.nodes:
+    #         g.node(str(node), label=f"{str(node)} {node.latency}")
 
-        for edge in self.edges:
-            g.edge(str(edge[0]), str(edge[1]))
+    #     for edge in self.edges:
+    #         g.edge(str(edge[0]), str(edge[1]))
 
-        g.render(filename=filename)
+    #     g.render(filename=filename)
 
 def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
     graph = RoutingResultGraph()
@@ -732,7 +731,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
                 elif tile.tile_type == TileType.IO1 or tile.tile_type == TileType.IO16:
                     tile.input_port_latencies[port] = 0
                     tile.input_port_break_path[port] = False
-
+    
     graph.update_edge_kernels()
     graph.update_sources_and_sinks()
 
