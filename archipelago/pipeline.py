@@ -1,4 +1,5 @@
 import sys
+import copy
 import os
 import argparse
 import re
@@ -248,6 +249,8 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     return kernel_latencies
 
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
+    graph.print_graph_tiles_only("pnr_graph_tile")
+    kernel_graph.print_graph("kernel_graph")
     nodes = kernel_graph.topological_sort()
     node_cycles = {}
 
@@ -255,7 +258,7 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
         cycles = set()
  
         if len(kernel_graph.sources[node]) == 0:
-            if node.kernel_type == KernelNodeType.COMPUTE:
+            if node.kernel_type == KernelNodeType.COMPUTE or node.kernel_type == KernelNodeType.MEM:
                 cycles = {None}
             else:
                 cycles = {0}
@@ -372,6 +375,7 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
     print("\nBranch delay matching within kernels")
     kernel_latencies = branch_delay_match_within_kernels(graph, id_to_name, placement, routing)
         
+    print("\nConstructing kernel graph")
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
     print("\nBranch delay matching kernels")
@@ -464,7 +468,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
         if os.path.isfile(id_to_name_filename):
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
-    import copy
+
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)
@@ -514,3 +518,15 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name
+
+
+    # import cProfile, pstats, io
+    # from pstats import SortKey
+    # pr = cProfile.Profile()
+    # pr.enable()
+    # pr.disable()
+    # s = io.StringIO()
+    # sortby = SortKey.CUMULATIVE
+    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    # ps.print_stats()
+    # print(s.getvalue())
