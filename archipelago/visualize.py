@@ -15,7 +15,6 @@ import pycyclone
 from pycyclone.io import load_placement
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
-from archipelago.sta import sta
 
 # Draw parameters
 GLOBAL_TILE_WIDTH = 200
@@ -469,48 +468,50 @@ def load_graph(graph_files):
     return graph_result
 
 
-def parse_args():
-    parser = argparse.ArgumentParser("Routing Result Visualization Tool")
-    parser.add_argument("-a", "--app", "-d", required=True,
-                        dest="application", type=str)
-    args = parser.parse_args()
-    dirname = os.path.join(args.application, "bin")
-    netlist = os.path.join(dirname, "design.packed")
-    assert os.path.exists(netlist), netlist + " does not exist"
-    placement = os.path.join(dirname, "design.place")
-    assert os.path.exists(placement), placement + " does not exists"
-    route = os.path.join(dirname, "design.route")
-    assert os.path.exists(route), route + " does not exists"
-    graph1 = os.path.join(dirname, "1.graph")
-    assert os.path.exists(graph1), route + " does not exists"
-    graph16 = os.path.join(dirname, "16.graph")
-    assert os.path.exists(graph16), route + " does not exists"
-    return netlist, placement, route, graph1, graph16
+# def parse_args():
+#     parser = argparse.ArgumentParser("Routing Result Visualization Tool")
+#     parser.add_argument("-a", "--app", "-d", required=True,
+#                         dest="application", type=str)
+#     args = parser.parse_args()
+#     dirname = os.path.join(args.application, "bin")
+#     netlist = os.path.join(dirname, "design.packed")
+#     assert os.path.exists(netlist), netlist + " does not exist"
+#     placement = os.path.join(dirname, "design.place")
+#     assert os.path.exists(placement), placement + " does not exists"
+#     route = os.path.join(dirname, "design.route")
+#     assert os.path.exists(route), route + " does not exists"
+#     graph1 = os.path.join(dirname, "1.graph")
+#     assert os.path.exists(graph1), route + " does not exists"
+#     graph16 = os.path.join(dirname, "16.graph")
+#     assert os.path.exists(graph16), route + " does not exists"
+#     return netlist, placement, route, graph1, graph16
 
 
-def main():
-    packed_file, placement_file, routing_file, graph1, graph16 = parse_args()
+# def main():
+#     packed_file, placement_file, routing_file, graph1, graph16 = parse_args()
 
-    id_to_name = pythunder.io.load_id_to_name(packed_file)
-    netlist, buses = pythunder.io.load_netlist(packed_file)
-    placement = load_placement(placement_file)
-    routing = load_routing_result(routing_file)
+#     id_to_name = pythunder.io.load_id_to_name(packed_file)
+#     netlist, buses = pythunder.io.load_netlist(packed_file)
+#     placement = load_placement(placement_file)
+#     routing = load_routing_result(routing_file)
 
-    routing_graphs = load_graph([graph1, graph16])
+#     routing_graphs = load_graph([graph1, graph16])
 
-    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
-        pe_latency = 1
-    else:
-        pe_latency = 0
+#     if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+#         pe_latency = 1
+#     else:
+#         pe_latency = 0
 
-    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
+#     routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
 
-    clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
+#     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
-    app_dir = os.path.dirname(packed_file)
+#     app_dir = os.path.dirname(packed_file)
 
-    visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir)
+#     routing_result_graph.print_graph("pnr_graph")
+
+#     visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

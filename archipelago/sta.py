@@ -3,10 +3,11 @@ import json
 import argparse
 import sys
 from pycyclone.io import load_placement
+import pycyclone
 import pythunder
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
-
+from archipelago.visualize import visualize_pnr
 
 class PathComponents:
     def __init__(self, glbs=0, hhops=0, uhops=0, dhops=0, pes=0, mems=0,
@@ -132,11 +133,30 @@ def sta(graph):
 
     return clock_speed, crit_path, crit_nodes
 
+def load_id_to_name(id_filename):
+    fin = open(id_filename, "r")
+    lines = fin.readlines()
+    id_to_name = {}
+
+    for line in lines:
+        id_to_name[line.split(": ")[0]] = line.split(": ")[1].rstrip()
+
+    return id_to_name
+
+def load_graph(graph_files):
+    graph_result = {}
+    for graph_file in graph_files:
+        bit_width = os.path.splitext(graph_file)[0]
+        bit_width = int(os.path.basename(bit_width))
+        graph = pycyclone.io.load_routing_graph(graph_file)
+        graph_result[bit_width] = graph
+    return graph_result
 
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
     parser.add_argument("-a", "--app", "-d", required=True,
                         dest="application", type=str)
+    parser.add_argument("-v", "--visualize", action="store_true")
     args = parser.parse_args()
     dirname = os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
@@ -145,14 +165,18 @@ def parse_args():
     assert os.path.exists(placement), placement + " does not exists"
     route = os.path.join(dirname, "design.route")
     assert os.path.exists(route), route + " does not exists"
-    return netlist, placement, route
+    id_to_name_filename = os.path.join(dirname, "design.id_to_name")
+    return netlist, placement, route, id_to_name_filename, args.visualize
 
 
 def main():
-    packed_file, placement_file, routing_file = parse_args()
+    packed_file, placement_file, routing_file, id_to_name_filename, visualize = parse_args()
 
-    id_to_name = pythunder.io.load_id_to_name(packed_file)
     netlist, buses = pythunder.io.load_netlist(packed_file)
+    
+    if os.path.isfile(id_to_name_filename):
+        id_to_name = load_id_to_name(id_to_name_filename)
+
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
@@ -163,7 +187,17 @@ def main():
 
     routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
     
-    sta(routing_result_graph)
+    clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
+
+    if visualize:
+        dirname = os.path.dirname(packed_file)
+        graph1 = os.path.join(dirname, "1.graph")
+        assert os.path.exists(graph1), route + " does not exists"
+        graph16 = os.path.join(dirname, "16.graph")
+        assert os.path.exists(graph16), route + " does not exists"
+        routing_graphs = load_graph([graph1, graph16])
+
+        visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
 
 
 if __name__ == "__main__":

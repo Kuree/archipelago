@@ -415,17 +415,16 @@ class RoutingResultGraph:
         return node
 
     def gen_placement(self, placement, netlist):
+        for blk_id, place in placement.items():
+            if place not in self.placement:
+                self.placement[place] = []
+            self.placement[place].append(blk_id)
 
         for net_id, conns in netlist.items():
             for conn in conns:
                 if conn[0] not in self.id_to_ports:
                     self.id_to_ports[conn[0]] = []
                 self.id_to_ports[conn[0]].append(conn[1])       
-
-        for blk_id, place in placement.items():
-            if place not in self.placement:
-                self.placement[place] = []
-            self.placement[place].append(blk_id)
 
     def get_tile_at(self, x, y, port):
         tiles = self.placement[(x,y)]
@@ -462,7 +461,7 @@ class RoutingResultGraph:
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = set()
-        for node in self.tiles:
+        for node in self.nodes:
             if node.kernel == kernel:
                 kernel_nodes.add(node)
 
@@ -540,6 +539,7 @@ class KernelNodeType(Enum):
     COMPUTE = 1
     MEM = 2
     RESET = 3
+    IO = 4
 
 
 class KernelNode:
@@ -643,15 +643,15 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
-    # def print_graph(self, filename):
-    #     g = Digraph()
-    #     for node in self.nodes:
-    #         g.node(str(node), label=f"{str(node)} {node.latency}")
+    def print_graph(self, filename):
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)} {node.latency}")
 
-    #     for edge in self.edges:
-    #         g.edge(str(edge[0]), str(edge[1]))
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
 
-    #     g.render(filename=filename)
+        g.render(filename=filename)
 
 def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
     graph = RoutingResultGraph()
@@ -731,6 +731,9 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
                 elif tile.tile_type == TileType.IO1 or tile.tile_type == TileType.IO16:
                     tile.input_port_latencies[port] = 0
                     tile.input_port_break_path[port] = False
+        else:
+            tile.input_port_latencies["reg"] = 1
+            tile.input_port_break_path["reg"] = True
     
     graph.update_edge_kernels()
     graph.update_sources_and_sinks()
@@ -757,6 +760,12 @@ def construct_kernel_graph(graph, new_latencies):
                 kernel_graph.add_node(kernel_node)
                 kernel_node.latency = new_latencies[source_id]
                 kernel_node.kernel_type = KernelNodeType.COMPUTE
+        elif source in graph.get_input_ios():
+            source_id = source.tile_id
+            if source_id not in kernel_graph.tile_id_to_tile:
+                kernel_node = KernelNode(kernel=source_id)
+                kernel_graph.add_node(kernel_node)
+                kernel_node.kernel_type = KernelNodeType.IO
         else:
             source_id = source.tile_id
             if source_id not in kernel_graph.tile_id_to_tile:
@@ -775,6 +784,12 @@ def construct_kernel_graph(graph, new_latencies):
                     kernel_graph.add_node(kernel_node)
                     kernel_node.latency = new_latencies[dest_id]
                     kernel_node.kernel_type = KernelNodeType.COMPUTE
+            elif dest in graph.get_input_ios():
+                dest_id = dest.tile_id
+                if dest_id not in kernel_graph.tile_id_to_tile:
+                    kernel_node = KernelNode(kernel=dest_id)
+                    kernel_graph.add_node(kernel_node)
+                    kernel_node.kernel_type = KernelNodeType.IO
             else:
                 dest_id = dest.tile_id
                 if dest_id not in kernel_graph.tile_id_to_tile:

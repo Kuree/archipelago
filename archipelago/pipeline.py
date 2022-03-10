@@ -378,6 +378,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
     print("\nConstructing kernel graph")
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
+    kernel_graph.print_graph("kernel_graph")
+
     print("\nBranch delay matching kernels")
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
@@ -497,10 +499,13 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
             max_itr = itr
         itr += 1
 
+    print("Can break", max_itr, "critical paths")
+
     id_to_name = id_to_name_save
     placement = placement_save
     routing = routing_save
     graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
+    starting_regs = graph.added_regs
     curr_freq, crit_path, crit_nets = sta(graph)
 
     for _ in range(max_itr):
@@ -517,18 +522,8 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
 
+    print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
+
     graph.print_graph_tiles_only("pnr_graph_tile")
 
     return placement, routing, id_to_name
-
-
-    # import cProfile, pstats, io
-    # from pstats import SortKey
-    # pr = cProfile.Profile()
-    # pr.enable()
-    # pr.disable()
-    # s = io.StringIO()
-    # sortby = SortKey.CUMULATIVE
-    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    # ps.print_stats()
-    # print(s.getvalue())
