@@ -19,7 +19,7 @@ def find_break_idx(graph, crit_path):
         raise ValueError("Can't find available register on critical path")
 
     while True:
-        if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
+        if isinstance(crit_path[break_idx + 1][0], RouteNode) and crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
            crit_path[break_idx][0].route_type == RouteType.SB:
             return break_idx
         break_idx += 1
@@ -28,7 +28,7 @@ def find_break_idx(graph, crit_path):
             break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
 
             while True:
-                if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
+                if isinstance(crit_path[break_idx + 1][0], RouteNode) and crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
                    crit_path[break_idx][0].route_type == RouteType.SB:
                     return break_idx
                 break_idx -= 1
@@ -272,7 +272,7 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
             if c is not None:
                 c += node.latency
 
-            if parent.kernel != "reset":
+            if not ("reset" in parent.kernel or (parent.kernel_type == KernelNodeType.MEM and str(parent)[0] == 'm')):
                 cycles.add(c)
         
         if None in cycles:
