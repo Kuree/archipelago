@@ -127,7 +127,6 @@ class RoutingResultGraph:
         self.outputs: Set[Union[RouteNode, TileNode]] = set()
         self.sources: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
         self.sinks: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
-        self.node_latencies: Dict[Union[RouteNode, TileNode], int] = {} 
         self.placement = {}
         self.id_to_ports = {}
         self.id_to_name: Dict[str, str] = {}
@@ -336,7 +335,6 @@ class RoutingResultGraph:
             if len(self.sinks[node]) == 0:
                 self.outputs.add(node)
 
-
     def topological_sort(self):
         visited = set()
         stack = []
@@ -454,6 +452,10 @@ class RoutingResultGraph:
                     node.kernel = in_node.kernel
                 else:
                     assert node.kernel is not None
+
+        for tile in self.get_tiles():
+            for source in self.sources[tile]:
+                source.kernel = tile.kernel
 
         for node in self.nodes:
             node.update_tile_id()
@@ -653,7 +655,7 @@ class KernelGraph:
 
         g.render(filename=filename)
 
-def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
+def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
     graph.gen_placement(placement, netlist)
@@ -671,6 +673,8 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
     graph.added_regs = max_reg_id + 1
 
     for net_id, net in routes.items():
+        if net_id == "e0" and pond_latency != 0:
+            continue
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
                 node1 = graph.segment_to_node(seg1, net_id)
@@ -726,7 +730,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0):
                         tile.input_port_latencies[port] = 1
                         tile.input_port_break_path[port] = True
                 elif tile.tile_type == TileType.POND:
-                    tile.input_port_latencies[port] = 0
+                    tile.input_port_latencies[port] = pond_latency
                     tile.input_port_break_path[port] = True
                 elif tile.tile_type == TileType.IO1 or tile.tile_type == TileType.IO16:
                     tile.input_port_latencies[port] = 0

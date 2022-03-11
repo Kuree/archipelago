@@ -19,7 +19,7 @@ def find_break_idx(graph, crit_path):
         raise ValueError("Can't find available register on critical path")
 
     while True:
-        if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
+        if isinstance(crit_path[break_idx + 1][0], RouteNode) and crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
            crit_path[break_idx][0].route_type == RouteType.SB:
             return break_idx
         break_idx += 1
@@ -28,7 +28,7 @@ def find_break_idx(graph, crit_path):
             break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
 
             while True:
-                if crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
+                if isinstance(crit_path[break_idx + 1][0], RouteNode) and crit_path[break_idx + 1][0].route_type == RouteType.RMUX and \
                    crit_path[break_idx][0].route_type == RouteType.SB:
                     return break_idx
                 break_idx -= 1
@@ -43,7 +43,6 @@ def reg_into_route(routes, g_break_node_source, new_reg_route_source):
                 if g_break_node_source.to_route() == segment:
                     route.insert(idx + 1, new_reg_route_source.to_route())
                     return 
-    breakpoint()
     assert False, f"Couldn't find segment {g_break_node_source.to_route()} in routing file"
 
 def break_crit_path(graph, id_to_name, crit_path, placement, routes):
@@ -118,13 +117,10 @@ def break_at(graph, node1, id_to_name, placement, routing):
         if curr_node in graph.get_ponds():
             break
     
-    # if curr_node in graph.get_ponds():
-    #     print("\t\tFound pond for branch delay matching", curr_node)
-    #     for source in graph.sources[curr_node]:
-    #         if graph.get_node(source).port == "flush":
-    #             continue
-    #         graph.node_latencies[source] += 1
-    #     return
+    if curr_node in graph.get_ponds():
+        print("\t\tFound pond for branch delay matching", curr_node)
+        curr_node.input_port_latencies["data_in_pond"] += 1
+        return
 
     if len(path) == 0:
         raise ValueError(f"Cant break at node: {node1}")
@@ -401,10 +397,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
     matched_flush_latencies = {id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()}
     
     pond_latencies = {}
-    # for pond_node, latency in graph.node_latencies.items():
-    #     g_pond_node = graph.get_node(pond_node)
-    #     if g_pond_node.port == "data_in_pond":
-    #         pond_latencies[id_to_name[graph.sinks[pond_node][0]]] = latency
+    for pond_node in graph.get_ponds():        
+        pond_latencies[id_to_name[pond_node.tile_id]] = pond_node.input_port_latencies["data_in_pond"]
     
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(matched_kernel_latencies))
@@ -480,9 +474,15 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     else:
         pe_cycles = 0
 
-    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
+    if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
+        pond_cycles = 1
+    else:
+        pond_cycles = 0
 
-    max_itr = None
+    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles, pond_cycles)
+    graph.print_graph_tiles_only("pnr_graph_tile")
+
+    max_itr = 0
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -504,7 +504,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     id_to_name = id_to_name_save
     placement = placement_save
     routing = routing_save
-    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles)
+    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles, pond_cycles)
     starting_regs = graph.added_regs
     curr_freq, crit_path, crit_nets = sta(graph)
 
@@ -524,6 +524,5 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
 
-    graph.print_graph_tiles_only("pnr_graph_tile")
 
     return placement, routing, id_to_name
