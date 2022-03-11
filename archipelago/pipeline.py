@@ -268,7 +268,7 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
             if c is not None:
                 c += node.latency
 
-            if parent.kernel != "reset":
+            if not ("reset" in parent.kernel or (parent.kernel_type == KernelNodeType.MEM and str(parent)[0] == 'm')):
                 cycles.add(c)
         
         if None in cycles:
