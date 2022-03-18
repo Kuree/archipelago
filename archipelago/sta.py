@@ -176,6 +176,8 @@ def main():
     
     if os.path.isfile(id_to_name_filename):
         id_to_name = load_id_to_name(id_to_name_filename)
+    else:
+        id_to_name = pythunder.io.load_id_to_name(packed_file)
 
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
