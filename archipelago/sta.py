@@ -7,7 +7,7 @@ import pycyclone
 import pythunder
 from archipelago.io import load_routing_result
 from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
-from archipelago.visualize import visualize_pnr
+# from archipelago.visualize import visualize_pnr
 
 class PathComponents:
     def __init__(self, glbs=0, hhops=0, uhops=0, dhops=0, pes=0, mems=0,
@@ -191,15 +191,15 @@ def main():
     
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
-    if visualize:
-        dirname = os.path.dirname(packed_file)
-        graph1 = os.path.join(dirname, "1.graph")
-        assert os.path.exists(graph1), route + " does not exists"
-        graph16 = os.path.join(dirname, "16.graph")
-        assert os.path.exists(graph16), route + " does not exists"
-        routing_graphs = load_graph([graph1, graph16])
+    # if visualize:
+    #     dirname = os.path.dirname(packed_file)
+    #     graph1 = os.path.join(dirname, "1.graph")
+    #     assert os.path.exists(graph1), route + " does not exists"
+    #     graph16 = os.path.join(dirname, "16.graph")
+    #     assert os.path.exists(graph16), route + " does not exists"
+    #     routing_graphs = load_graph([graph1, graph16])
 
-        visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
+    #     visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
 
 
 if __name__ == "__main__":
