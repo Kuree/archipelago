@@ -2,7 +2,7 @@ import sys
 import os
 from typing import Dict, List, Set, Union
 from enum import Enum
-from graphviz import Digraph
+# from graphviz import Digraph
 
 class RouteType(Enum):
     SB=1
@@ -491,50 +491,50 @@ class RoutingResultGraph:
                         visited.add(node)
         return kernel_output_nodes
 
-    def print_graph(self, filename, edge_weights = False):
-        g = Digraph()
-        for node in self.nodes:
-            g.node(str(node), label = f"{node}\n{node.kernel}")
+    # def print_graph(self, filename, edge_weights = False):
+    #     g = Digraph()
+    #     for node in self.nodes:
+    #         g.node(str(node), label = f"{node}\n{node.kernel}")
 
-        for edge in self.edges:
-            g.edge(str(edge[0]), str(edge[1]))
+    #     for edge in self.edges:
+    #         g.edge(str(edge[0]), str(edge[1]))
             
-        g.render(filename=filename)
+    #     g.render(filename=filename)
 
-    def print_graph_tiles_only(self, filename):
-        g = Digraph()
-        for source in self.get_tiles():
-            if source.tile_id[0] == 'r':
-                g.node(str(source), label = f"{source}\n{source.kernel}", shape='box')
-            else:
-                g.node(str(source), label = f"{source}\n{source.kernel}")
-            for dest in self.get_tiles():
-                reachable = False
-                visited = set()
-                queue = []
-                queue.append(source)
-                visited.add(source)
-                while queue:
-                    n = queue.pop()
+    # def print_graph_tiles_only(self, filename):
+    #     g = Digraph()
+    #     for source in self.get_tiles():
+    #         if source.tile_id[0] == 'r':
+    #             g.node(str(source), label = f"{source}\n{source.kernel}", shape='box')
+    #         else:
+    #             g.node(str(source), label = f"{source}\n{source.kernel}")
+    #         for dest in self.get_tiles():
+    #             reachable = False
+    #             visited = set()
+    #             queue = []
+    #             queue.append(source)
+    #             visited.add(source)
+    #             while queue:
+    #                 n = queue.pop()
 
-                    if n == dest and n != source:
-                        reachable = True
+    #                 if n == dest and n != source:
+    #                     reachable = True
 
-                    if n not in self.sinks:
-                        breakpoint()
-                    for node in self.sinks[n]:
-                        if node not in visited:
-                            if isinstance(node, TileNode):
-                                if node == dest:
-                                    reachable = True
-                            else:
-                                queue.append(node)
-                                visited.add(node)
+    #                 if n not in self.sinks:
+    #                     breakpoint()
+    #                 for node in self.sinks[n]:
+    #                     if node not in visited:
+    #                         if isinstance(node, TileNode):
+    #                             if node == dest:
+    #                                 reachable = True
+    #                         else:
+    #                             queue.append(node)
+    #                             visited.add(node)
 
-                if reachable:
-                    g.edge(str(source), str(dest))
+    #             if reachable:
+    #                 g.edge(str(source), str(dest))
 
-        g.render(filename=filename)
+    #     g.render(filename=filename)
 
 
 class KernelNodeType(Enum):
@@ -645,15 +645,15 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
-    def print_graph(self, filename):
-        g = Digraph()
-        for node in self.nodes:
-            g.node(str(node), label=f"{str(node)} {node.latency}")
+    # def print_graph(self, filename):
+    #     g = Digraph()
+    #     for node in self.nodes:
+    #         g.node(str(node), label=f"{str(node)} {node.latency}")
 
-        for edge in self.edges:
-            g.edge(str(edge[0]), str(edge[1]))
+    #     for edge in self.edges:
+    #         g.edge(str(edge[0]), str(edge[1]))
 
-        g.render(filename=filename)
+    #     g.render(filename=filename)
 
 def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0):
     graph = RoutingResultGraph()

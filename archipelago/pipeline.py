@@ -12,9 +12,9 @@ from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_
 from archipelago.sta import sta, load_graph
 
 
-def verboseprint(*args, **kwargs):
-    print(*args, **kwargs)
-# verboseprint = lambda *a, **k: None 
+# def verboseprint(*args, **kwargs):
+#     print(*args, **kwargs)
+verboseprint = lambda *a, **k: None 
 
 def find_break_idx(graph, crit_path):
     crit_path_adjusted = [abs(c - crit_path[-1][1]/2) for n,c in crit_path]
@@ -484,7 +484,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles, pond_cycles)
 
-    max_itr = None
+    max_itr = 0
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -525,14 +525,5 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
     dump_id_to_name(app_dir, id_to_name)
 
     print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
-
-    dirname = app_dir
-    graph1 = os.path.join(dirname, "1.graph")
-    assert os.path.exists(graph1), route + " does not exists"
-    graph16 = os.path.join(dirname, "16.graph")
-    assert os.path.exists(graph16), route + " does not exists"
-    routing_graphs = load_graph([graph1, graph16])
-
-    visualize_pnr(routing_graphs, graph, crit_path, dirname)
 
     return placement, routing, id_to_name
