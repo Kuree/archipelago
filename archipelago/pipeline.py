@@ -299,7 +299,10 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
     if harden_flush:
         flush_cycles = {}
         for mem in graph.get_mems():
-            flush_cycles[mem] = mem.y//(pipeline_config_interval + 1)
+            if mem.y == 0:
+                flush_cycles[mem] = 0
+            else:
+                flush_cycles[mem] = (mem.y-1)//pipeline_config_interval
     else:
         for io in graph.get_input_ios():
             if io.kernel == "io1in_reset":
