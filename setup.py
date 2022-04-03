@@ -14,6 +14,7 @@ setup(
     install_requires=[
         "pythunder",
         "pycyclone",
+        "Pillow-SIMD"
     ],
     data_files=[
         ('sta_delays', ['archipelago/sta_delays.json']),
