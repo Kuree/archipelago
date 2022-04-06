@@ -12,9 +12,9 @@ from archipelago.pnr_graph import KernelNodeType, RoutingResultGraph, construct_
 from archipelago.sta import sta, load_graph
 
 
-# def verboseprint(*args, **kwargs):
-#     print(*args, **kwargs)
-verboseprint = lambda *a, **k: None 
+def verboseprint(*args, **kwargs):
+    print(*args, **kwargs)
+# verboseprint = lambda *a, **k: None 
 
 def find_break_idx(graph, crit_path):
     crit_path_adjusted = [abs(c - crit_path[-1][1]/2) for n,c in crit_path]
@@ -482,12 +482,19 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
         pond_cycles = 1
+        pe_cycles = 0
     else:
         pond_cycles = 0
 
     graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles, pond_cycles)
 
-    max_itr = 0
+    if 'POST_PNR_ITR' in os.environ:
+        if os.environ['POST_PNR_ITR'] == 'None':
+            max_itr = None
+        else:
+            max_itr = int(os.environ['POST_PNR_ITR'])
+    else:
+        max_itr = 0
     curr_freq = 0
     itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
