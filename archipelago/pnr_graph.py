@@ -336,6 +336,7 @@ class RoutingResultGraph:
                 self.outputs.add(node)
 
     def topological_sort(self):
+        sys.setrecursionlimit(10**6)
         visited = set()
         stack = []
         for n in self.inputs:
@@ -377,7 +378,7 @@ class RoutingResultGraph:
         return None
 
     def fix_cycles(self):
-        sys.setrecursionlimit(10**5)
+        sys.setrecursionlimit(10**6)
         visited = []
         rec_stack = []
         for node in self.inputs:
