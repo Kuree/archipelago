@@ -482,7 +482,6 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
         pond_cycles = 1
-        pe_cycles = 0
     else:
         pond_cycles = 0
 
