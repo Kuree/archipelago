@@ -65,11 +65,6 @@ class RouteNode:
         self.update_tile_id()
         return f"{self.tile_id}"
 
-    # def __eq__(self, other):
-    #     return self.tile_id == other.tile_id
-
-    # def __hash__(self):
-    #     return hash(self.tile_id)
 
 class TileType(Enum):
     PE=1
@@ -431,17 +426,26 @@ class RoutingResultGraph:
         for tile in tiles:
             if port in self.id_to_ports[tile]:
                 return tile
-        
+       
         return None
 
-    def get_reg_at(self, x, y):
-        tiles = self.placement[(x,y)]
+    def get_or_create_reg_at(self, x, y, track, bit_width):
+        tiles = self.get_tiles()
 
         for tile in tiles:
-            if tile[0] == 'r':
+            if tile.tile_id[0] == 'r' and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width:
                 return tile
+
+        node = TileNode(x, y, tile_id=f'r{self.added_regs}', kernel=None)
+        node.track = track
+        node.bit_width = bit_width
+        self.add_node(node)
+
+        self.id_to_name[node.tile_id] = f"pnr_pipelining{self.added_regs}"
+
+        self.added_regs += 1
         
-        return None
+        return node
 
     def update_edge_kernels(self):
         nodes = self.topological_sort()
@@ -449,7 +453,7 @@ class RoutingResultGraph:
         for in_node in nodes:
             assert in_node.kernel is not None
             for node in self.sinks[in_node]:
-                if isinstance(node, RouteNode):
+                if isinstance(node, RouteNode) or node.tile_type == TileType.REG:
                     node.kernel = in_node.kernel
                 else:
                     assert node.kernel is not None
@@ -461,6 +465,30 @@ class RoutingResultGraph:
         for node in self.nodes:
             node.update_tile_id()
             assert node.kernel is not None, node
+
+    def fix_regs(self):
+        for tile in self.get_tiles():
+            if tile.tile_type == TileType.REG:
+                for sink in self.sinks[tile]:
+                    if sink in self.sources[tile]:
+                        self.remove_edge((tile, sink))
+                        sink_copy = RouteNode(sink.x, sink.y, route_type=RouteType.REG, track=sink.track,
+                        bit_width=sink.bit_width, net_id=sink.net_id, reg_name=sink.reg_name, port="reg", kernel=sink.kernel) 
+
+                        self.tile_id_to_tile.pop(sink.tile_id)
+                        sink.reg = True
+                        sink.update_tile_id()
+                        self.tile_id_to_tile[sink.tile_id] = sink
+
+                        sink_copy.reg = False
+                        sink_copy.update_tile_id()
+
+                        self.add_node(sink_copy)
+                        self.add_edge(tile, sink_copy)
+                        for sink_sink in self.sinks[sink]:
+                            if sink_sink != tile:
+                                self.remove_edge((sink, sink_sink))
+                                self.add_edge(sink_copy, sink_sink)
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = set()
@@ -664,18 +692,15 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
     max_reg_id = 0
 
     for blk_id, place in placement.items():
-        if len(graph.id_to_name[blk_id].split("$")) > 0:
-            kernel = graph.id_to_name[blk_id].split("$")[0]
-        else:
-            kernel = None
-        node = TileNode(place[0], place[1], tile_id=blk_id, kernel=kernel)
-        graph.add_node(node)
-        max_reg_id = max(max_reg_id, int(blk_id[1:]))
-    graph.added_regs = max_reg_id + 1
+        if blk_id[0] != 'r':
+            if len(graph.id_to_name[blk_id].split("$")) > 0:
+                kernel = graph.id_to_name[blk_id].split("$")[0]
+            else:
+                kernel = None
+            node = TileNode(place[0], place[1], tile_id=blk_id, kernel=kernel)
+            graph.add_node(node)
 
     for net_id, net in routes.items():
-        if net_id == "e0" and pond_latency != 0:
-            continue
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
                 node1 = graph.segment_to_node(seg1, net_id)
@@ -688,16 +713,18 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
-                    tile_id = graph.get_reg_at(node1.x, node1.y)
-                    graph.add_edge(graph.get_tile(tile_id), node1)
+                    reg_tile = graph.get_or_create_reg_at(node1.x, node1.y, node1.track, node1.bit_width)
+                    graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
-                    tile_id = graph.get_reg_at(node2.x, node2.y)
-                    graph.add_edge(node2, graph.get_tile(tile_id))
+                    reg_tile = graph.get_or_create_reg_at(node2.x, node2.y, node2.track, node2.bit_width)
+                    graph.add_edge(node2, reg_tile)
+    
     graph.update_sources_and_sinks()
+    graph.fix_regs()
 
     id_to_input_ports = {}
     for net_id, conns in netlist.items():
@@ -737,8 +764,9 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile.input_port_latencies[port] = 0
                     tile.input_port_break_path[port] = False
         else:
-            tile.input_port_latencies["reg"] = 1
-            tile.input_port_break_path["reg"] = True
+            if tile_id[0] == 'r':
+                tile.input_port_latencies["reg"] = 1
+                tile.input_port_break_path["reg"] = True
     
     graph.update_edge_kernels()
     graph.update_sources_and_sinks()

@@ -535,4 +535,5 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
 
+
     return placement, routing, id_to_name
