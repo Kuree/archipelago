@@ -187,7 +187,12 @@ def main():
     else:
         pe_latency = 0
 
-    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency)
+    if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
+        pond_latency = 1
+    else:
+        pond_latency = 0
+
+    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency, pond_latency, no_added_regs=False)
     
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 

@@ -429,23 +429,30 @@ class RoutingResultGraph:
        
         return None
 
-    def get_or_create_reg_at(self, x, y, track, bit_width):
-        tiles = self.get_tiles()
+    def get_or_create_reg_at(self, no_added_regs, x, y, track, bit_width):
+        if no_added_regs:
+            tiles = self.placement[(x,y)]
 
-        for tile in tiles:
-            if tile.tile_id[0] == 'r' and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width:
-                return tile
+            for tile_id in tiles:
+                if tile_id[0] == 'r':
+                    return self.tile_id_to_tile[tile_id]
+        else:
+            tiles = self.get_tiles()
 
-        node = TileNode(x, y, tile_id=f'r{self.added_regs}', kernel=None)
-        node.track = track
-        node.bit_width = bit_width
-        self.add_node(node)
+            for tile in tiles:
+                if tile.tile_id[0] == 'r' and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width:
+                    return tile
 
-        self.id_to_name[node.tile_id] = f"pnr_pipelining{self.added_regs}"
+            node = TileNode(x, y, tile_id=f'r{self.added_regs}', kernel=None)
+            node.track = track
+            node.bit_width = bit_width
+            self.add_node(node)
 
-        self.added_regs += 1
-        
-        return node
+            self.id_to_name[node.tile_id] = f"pnr_pipelining{self.added_regs}"
+
+            self.added_regs += 1
+            
+            return node
 
     def update_edge_kernels(self):
         nodes = self.topological_sort()
@@ -467,10 +474,13 @@ class RoutingResultGraph:
             assert node.kernel is not None, node
 
     def fix_regs(self):
+        # When loading a routing result that has regs added, need to make sure a reg tile is in the graph
         for tile in self.get_tiles():
             if tile.tile_type == TileType.REG:
                 for sink in self.sinks[tile]:
                     if sink in self.sources[tile]:
+                        # If one isn't hooked up correctly we need to fix it
+                        # Pretty hacky but works
                         self.remove_edge((tile, sink))
                         sink_copy = RouteNode(sink.x, sink.y, route_type=RouteType.REG, track=sink.track,
                         bit_width=sink.bit_width, net_id=sink.net_id, reg_name=sink.reg_name, port="reg", kernel=sink.kernel) 
@@ -684,7 +694,7 @@ class KernelGraph:
 
         g.render(filename=filename)
 
-def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0):
+def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, no_added_regs=True):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
     graph.gen_placement(placement, netlist)
@@ -692,7 +702,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
     max_reg_id = 0
 
     for blk_id, place in placement.items():
-        if blk_id[0] != 'r':
+        if no_added_regs or blk_id[0] != 'r':
             if len(graph.id_to_name[blk_id].split("$")) > 0:
                 kernel = graph.id_to_name[blk_id].split("$")[0]
             else:
@@ -713,17 +723,18 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(node1.x, node1.y, node1.track, node1.bit_width)
+                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node1.x, node1.y, node1.track, node1.bit_width)
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(node2.x, node2.y, node2.track, node2.bit_width)
+                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node2.x, node2.y, node2.track, node2.bit_width)
                     graph.add_edge(node2, reg_tile)
     
     graph.update_sources_and_sinks()
+    
     graph.fix_regs()
 
     id_to_input_ports = {}
