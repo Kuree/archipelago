@@ -203,7 +203,7 @@ def main():
         graph16 = os.path.join(dirname, "16.graph")
         assert os.path.exists(graph16), route + " does not exists"
         routing_graphs = load_graph([graph1, graph16])
-
+        
         visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
 
 
