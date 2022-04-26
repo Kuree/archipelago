@@ -460,7 +460,7 @@ class RoutingResultGraph:
         for in_node in nodes:
             assert in_node.kernel is not None
             for node in self.sinks[in_node]:
-                if isinstance(node, RouteNode) or node.tile_type == TileType.REG:
+                if isinstance(node, RouteNode) or (node.tile_type == TileType.REG and node.kernel == None):
                     node.kernel = in_node.kernel
                 else:
                     assert node.kernel is not None
@@ -709,6 +709,8 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                 kernel = None
             node = TileNode(place[0], place[1], tile_id=blk_id, kernel=kernel)
             graph.add_node(node)
+            max_reg_id = max(max_reg_id, int(blk_id[1:]))
+    graph.added_regs = max_reg_id + 1
 
     for net_id, net in routes.items():
         for route in net:
