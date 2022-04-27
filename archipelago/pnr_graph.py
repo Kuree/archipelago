@@ -299,12 +299,10 @@ class RoutingResultGraph:
         self.edges.add((node1, node2))
 
         if node2 not in self.sources:
-            self.sources[node2] = []
-        self.sources[node2].append(node1)
+            self.sources[node2] = [node1]
 
         if node1 not in self.sinks:
-            self.sinks[node1] = []
-        self.sinks[node1].append(node2)
+            self.sinks[node1] = [node2]
 
     def update_sources_and_sinks(self):
         self.inputs = set()
@@ -429,7 +427,7 @@ class RoutingResultGraph:
        
         return None
 
-    def get_or_create_reg_at(self, no_added_regs, x, y, track, bit_width):
+    def get_or_create_reg_at(self, no_added_regs, x, y, track, bit_width, reg_name):
         if no_added_regs:
             tiles = self.placement[(x,y)]
 
@@ -440,12 +438,13 @@ class RoutingResultGraph:
             tiles = self.get_tiles()
 
             for tile in tiles:
-                if tile.tile_id[0] == 'r' and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width:
+                if tile.tile_type == TileType.REG and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width and tile.reg_name == reg_name:
                     return tile
 
             node = TileNode(x, y, tile_id=f'r{self.added_regs}', kernel=None)
             node.track = track
             node.bit_width = bit_width
+            node.reg_name = reg_name
             self.add_node(node)
 
             self.id_to_name[node.tile_id] = f"pnr_pipelining{self.added_regs}"
@@ -460,12 +459,13 @@ class RoutingResultGraph:
         for in_node in nodes:
             assert in_node.kernel is not None
             for node in self.sinks[in_node]:
-                if isinstance(node, RouteNode) or (node.tile_type == TileType.REG and node.kernel == None):
+                if isinstance(node, RouteNode) or (node.tile_type == TileType.REG and node.kernel is None):
                     node.kernel = in_node.kernel
                 else:
                     assert node.kernel is not None
 
         for tile in self.get_tiles():
+            assert tile.kernel is not None, tile
             for source in self.sources[tile]:
                 source.kernel = tile.kernel
 
@@ -709,7 +709,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                 kernel = None
             node = TileNode(place[0], place[1], tile_id=blk_id, kernel=kernel)
             graph.add_node(node)
-            max_reg_id = max(max_reg_id, int(blk_id[1:]))
+        max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
 
     for net_id, net in routes.items():
@@ -725,14 +725,14 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node1.x, node1.y, node1.track, node1.bit_width)
+                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node1.x, node1.y, node1.track, node1.bit_width, node1.reg_name)
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node2.x, node2.y, node2.track, node2.bit_width)
+                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node2.x, node2.y, node2.track, node2.bit_width, node2.reg_name)
                     graph.add_edge(node2, reg_tile)
     
     graph.update_sources_and_sinks()
@@ -781,8 +781,8 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                 tile.input_port_latencies["reg"] = 1
                 tile.input_port_break_path["reg"] = True
     
-    graph.update_edge_kernels()
     graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
 
     while graph.fix_cycles():
         pass
