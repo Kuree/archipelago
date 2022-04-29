@@ -345,42 +345,60 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                 new_latencies[node1] = 0
 
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
-       
+    from fuzzywuzzy import process
+
     sorted_new_latencies = {}
     for k in sorted(new_latencies, key=lambda a: len(str(a))):
         sorted_new_latencies[k] = new_latencies[k]
+
     for kernel, lat in kernel_latencies.items():
-        new_lat = ("old", lat)
 
         if "glb" in kernel:
             new_lat = 0
         elif f"op_{kernel}" in sorted_new_latencies:
             new_lat = sorted_new_latencies[f"op_{kernel}"]
-        elif "hcompute_hw_output" in kernel:
-            for f_kernel, lat in sorted_new_latencies.items():
-                if "io16_" in f_kernel and f"{kernel.split('hw_output')[-1]}_write" in f_kernel:
-                    new_lat = sorted_new_latencies[f_kernel]
-                    break
-        elif "hcompute_hw_" in kernel:
-            for f_kernel, lat in sorted_new_latencies.items():
-                if "io16in_" in f_kernel and f"{kernel.split('global_wrapper')[-1]}_read" in f_kernel:
-                    new_lat = sorted_new_latencies[f_kernel]
-                    break
         else:
-            f_kernel = kernel.split("hcompute_")[1]
-            if f_kernel in sorted_new_latencies:
-                new_lat = sorted_new_latencies[f_kernel]
+            out_ = kernel.replace("hcompute_", "io16_")
+            in_ = kernel.replace("hcompute_", "io16in_")
+            out_match = process.extractOne(out_, sorted_new_latencies.keys())
+            in_match = process.extractOne(in_, sorted_new_latencies.keys())
+
+            if out_match[1] > in_match[1]:
+                match = out_match[0]
             else:
-                for f_kernel, lat in sorted_new_latencies.items():
-                    if kernel in str(f_kernel):
-                        new_lat = sorted_new_latencies[f_kernel]
-                        break
-                if kernel not in f_kernel:
-                   new_lat = None
+                match = in_match[0]
+
+            new_lat = sorted_new_latencies[match]
+            print("Matched", kernel, match)
+
+        # elif "hcompute_hw_output" in kernel:
+        #     for f_kernel, lat in sorted_new_latencies.items():
+        #         if "io16_" in f_kernel and f"{kernel.split('hw_output')[-1]}_write" in f_kernel:
+        #             new_lat = sorted_new_latencies[f_kernel]
+        #             break
+        # elif "hcompute_hw_" in kernel:
+        #     for f_kernel, lat in sorted_new_latencies.items():
+        #         if "io16in_" in f_kernel and f"{kernel.split('global_wrapper')[-1]}_read" in f_kernel:
+        #             new_lat = sorted_new_latencies[f_kernel]
+        #             break
+        # else:
+        #     f_kernel = kernel.split("hcompute_")[1]
+        #     if f_kernel in sorted_new_latencies:
+        #         new_lat = sorted_new_latencies[f_kernel]
+        #     else:
+        #         for f_kernel, lat in sorted_new_latencies.items():
+        #             if kernel in str(f_kernel):
+        #                 new_lat = sorted_new_latencies[f_kernel]
+        #                 break
+        #         if kernel not in f_kernel:
+        #            new_lat = None
         if new_lat != None:
             kernel_latencies[kernel] = new_lat
 
     print("\nCompute Kernel Latnecies:")
+    for k,v in sorted_new_latencies.items(): 
+        print("\t", k, v)
+    print("\n")
     for k,v in kernel_latencies.items(): 
         print("\t", k, v)
     return kernel_latencies
@@ -408,6 +426,8 @@ def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, har
 
     f = open(kernel_latencies_file, "r")
     existing_kernel_latencies = json.load(f)
+
+    kernel_graph.print_graph("/aha/kernel_graph")
 
     matched_kernel_latencies = calculate_latencies(kernel_graph, existing_kernel_latencies)
     matched_flush_latencies = {id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()}
