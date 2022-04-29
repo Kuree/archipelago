@@ -326,6 +326,29 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
                 parent_node = graph.sources[parent_node][0]
     return flush_cycles
 
+def find_closest_match(kernel_target, candidates):
+    junk = ["hcompute_", "cgra_", "glb_", "global_wrapper_", "clkwrk_", "stencil_", "op_"]
+    
+    cleaned_candidates = candidates.copy()
+    for idx, key in enumerate(candidates):
+        for j in junk:
+            cleaned_candidates[idx] = cleaned_candidates[idx].replace(j,"")
+
+    for j in junk:
+        kernel_target = kernel_target.replace(j,"")
+
+    matches_and_ratios = []
+
+    for idx, candidate in enumerate(cleaned_candidates):
+        ratio = 0
+        if "io16" in candidate:
+            for a in kernel_target.split("_"):
+                if a in candidate.split("_"):
+                    ratio += 1
+        matches_and_ratios.append((candidates[idx], ratio))
+
+    return max(matches_and_ratios,key=lambda item:item[1])[0]
+
 def calculate_latencies(kernel_graph, kernel_latencies):
     nodes = kernel_graph.topological_sort()
     new_latencies = {}
@@ -345,8 +368,6 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                 new_latencies[node1] = 0
 
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
-    from fuzzywuzzy import process
-
     sorted_new_latencies = {}
     for k in sorted(new_latencies, key=lambda a: len(str(a))):
         sorted_new_latencies[k] = new_latencies[k]
@@ -358,16 +379,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
         elif f"op_{kernel}" in sorted_new_latencies:
             new_lat = sorted_new_latencies[f"op_{kernel}"]
         else:
-            out_ = kernel.replace("hcompute_", "io16_")
-            in_ = kernel.replace("hcompute_", "io16in_")
-            out_match = process.extractOne(out_, sorted_new_latencies.keys())
-            in_match = process.extractOne(in_, sorted_new_latencies.keys())
-
-            if out_match[1] > in_match[1]:
-                match = out_match[0]
-            else:
-                match = in_match[0]
-
+            match = find_closest_match(kernel, list(sorted_new_latencies.keys()))
             new_lat = sorted_new_latencies[match]
             print("Matched", kernel, match)
 
