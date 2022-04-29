@@ -345,19 +345,25 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                 new_latencies[node1] = 0
 
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
+       
     sorted_new_latencies = {}
     for k in sorted(new_latencies, key=lambda a: len(str(a))):
         sorted_new_latencies[k] = new_latencies[k]
     for kernel, lat in kernel_latencies.items():
-        if "glb" in kernel:
-            continue
-        new_lat = lat
+        new_lat = ("old", lat)
 
-        if f"op_{kernel}" in sorted_new_latencies:
+        if "glb" in kernel:
+            new_lat = 0
+        elif f"op_{kernel}" in sorted_new_latencies:
             new_lat = sorted_new_latencies[f"op_{kernel}"]
-        elif "input" in kernel:
+        elif "hcompute_hw_output" in kernel:
             for f_kernel, lat in sorted_new_latencies.items():
-                if "input" in f_kernel:
+                if "io16_" in f_kernel and f"{kernel.split('hw_output')[-1]}_write" in f_kernel:
+                    new_lat = sorted_new_latencies[f_kernel]
+                    break
+        elif "hcompute_hw_" in kernel:
+            for f_kernel, lat in sorted_new_latencies.items():
+                if "io16in_" in f_kernel and f"{kernel.split('global_wrapper')[-1]}_read" in f_kernel:
                     new_lat = sorted_new_latencies[f_kernel]
                     break
         else:
@@ -373,6 +379,10 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                    new_lat = None
         if new_lat != None:
             kernel_latencies[kernel] = new_lat
+
+    print("\nCompute Kernel Latnecies:")
+    for k,v in kernel_latencies.items(): 
+        print("\t", k, v)
     return kernel_latencies
 
 def update_kernel_latencies(dir_name, graph, id_to_name, placement, routing, harden_flush, pipeline_config_interval):
@@ -535,5 +545,7 @@ def pipeline_pnr(app_dir, placement, routing, id_to_name, netlist, load_only, ha
 
     print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
 
+
+    graph.print_graph_tiles_only("/aha/pnr_graph_tiles")
 
     return placement, routing, id_to_name
