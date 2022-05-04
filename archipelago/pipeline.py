@@ -20,11 +20,9 @@ from archipelago.pnr_graph import (
 from archipelago.sta import sta, load_graph
 
 
-def verboseprint(*args, **kwargs):
-    print(*args, **kwargs)
-
-
-# verboseprint = lambda *a, **k: None
+# def verboseprint(*args, **kwargs):
+#     print(*args, **kwargs)
+verboseprint = lambda *a, **k: None
 
 
 def find_break_idx(graph, crit_path):
@@ -464,17 +462,17 @@ def calculate_latencies(kernel_graph, kernel_latencies):
         else:
             match = find_closest_match(kernel, list(sorted_new_latencies.keys()))
             new_lat = sorted_new_latencies[match]
-            print("Matched", kernel, match)
+            verboseprint("Matched", kernel, match)
 
         if new_lat != None:
             kernel_latencies[kernel] = new_lat
 
-    print("\nCompute Kernel Latnecies:")
+    verboseprint("\nCompute Kernel Latnecies:")
     for k, v in sorted_new_latencies.items():
-        print("\t", k, v)
-    print("\n")
+        verboseprint("\t", k, v)
+    verboseprint("\n")
     for k, v in kernel_latencies.items():
-        print("\t", k, v)
+        verboseprint("\t", k, v)
     return kernel_latencies
 
 
