@@ -4,25 +4,42 @@ from typing import Dict, List, Set, Union
 from enum import Enum
 from graphviz import Digraph
 
+
 class RouteType(Enum):
-    SB=1
-    RMUX=2
-    PORT=3
-    REG=4
+    SB = 1
+    RMUX = 2
+    PORT = 3
+    REG = 4
+
 
 class RouteNode:
-    def __init__(self, x, y, route_type=None, track=None,
-                 side=None, io=None, bit_width=None, port=None, net_id=None,
-                 reg_name=None, rmux_name=None, reg=False, kernel=None):
-        
+    def __init__(
+        self,
+        x,
+        y,
+        route_type=None,
+        track=None,
+        side=None,
+        io=None,
+        bit_width=None,
+        port=None,
+        net_id=None,
+        reg_name=None,
+        rmux_name=None,
+        reg=False,
+        kernel=None,
+    ):
+
         assert x is not None
         self.x = x
         assert y is not None
         self.y = y
-        
-        self.tile_id = f"{route_type or 0},{x or 0},{y or 0},"+\
-            f"{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},"+\
-            f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg},{kernel}"
+
+        self.tile_id = (
+            f"{route_type or 0},{x or 0},{y or 0},"
+            + f"{track or 0},{side or 0},{io or 0},{bit_width or 0},{port or 0},"
+            + f"{net_id or 0},{reg_name or 0},{rmux_name or 0},{reg},{kernel}"
+        )
         assert self.tile_id is not None
 
         self.route_type = route_type
@@ -40,23 +57,40 @@ class RouteNode:
         self.kernel = kernel
 
     def update_tile_id(self):
-        self.tile_id = f"{self.route_type or 0},"+\
-                        f"{self.x or 0},{self.y or 0},{self.track or 0},"+\
-                        f"{self.side or 0},{self.io or 0},"+\
-                        f"{self.bit_width or 0},{self.port or 0},"+\
-                        f"{self.net_id or 0},{self.reg_name or 0},"+\
-                        f"{self.rmux_name or 0},{self.reg},{self.kernel}"
+        self.tile_id = (
+            f"{self.route_type or 0},"
+            + f"{self.x or 0},{self.y or 0},{self.track or 0},"
+            + f"{self.side or 0},{self.io or 0},"
+            + f"{self.bit_width or 0},{self.port or 0},"
+            + f"{self.net_id or 0},{self.reg_name or 0},"
+            + f"{self.rmux_name or 0},{self.reg},{self.kernel}"
+        )
         assert self.tile_id is not None
 
     def to_route(self):
         if self.route_type == RouteType.SB:
-            route_string = ['SB', self.track, self.x, self.y, self.side, self.io, self.bit_width]
+            route_string = [
+                "SB",
+                self.track,
+                self.x,
+                self.y,
+                self.side,
+                self.io,
+                self.bit_width,
+            ]
         elif self.route_type == RouteType.PORT:
-            route_string = ['PORT', self.port, self.x, self.y, self.bit_width]
+            route_string = ["PORT", self.port, self.x, self.y, self.bit_width]
         elif self.route_type == RouteType.REG:
-            route_string = ['REG', self.reg_name, self.track, self.x, self.y, self.bit_width]
+            route_string = [
+                "REG",
+                self.reg_name,
+                self.track,
+                self.x,
+                self.y,
+                self.bit_width,
+            ]
         elif self.route_type == RouteType.RMUX:
-            route_string = ['RMUX', self.rmux_name, self.x, self.y, self.bit_width]
+            route_string = ["RMUX", self.rmux_name, self.x, self.y, self.bit_width]
         else:
             raise ValueError("Unrecognized route type")
         return route_string
@@ -67,32 +101,33 @@ class RouteNode:
 
 
 class TileType(Enum):
-    PE=1
-    MEM=2
-    REG=3
-    POND=4
-    IO16=5
-    IO1=6
+    PE = 1
+    MEM = 2
+    REG = 3
+    POND = 4
+    IO16 = 5
+    IO1 = 6
+
 
 class TileNode:
     def __init__(self, x, y, tile_id, kernel):
-        
+
         self.x = x
         self.y = y
-        
+
         self.tile_id = tile_id
 
-        if self.tile_id[0] == 'p':
+        if self.tile_id[0] == "p":
             self.tile_type = TileType.PE
-        elif self.tile_id[0] == 'm':
+        elif self.tile_id[0] == "m":
             self.tile_type = TileType.MEM
-        elif self.tile_id[0] == 'M':
+        elif self.tile_id[0] == "M":
             self.tile_type = TileType.POND
-        elif self.tile_id[0] == 'r':
+        elif self.tile_id[0] == "r":
             self.tile_type = TileType.REG
-        elif self.tile_id[0] == 'I':
+        elif self.tile_id[0] == "I":
             self.tile_type = TileType.IO16
-        elif self.tile_id[0] == 'i':
+        elif self.tile_id[0] == "i":
             self.tile_type = TileType.IO1
 
         self.kernel = kernel
@@ -112,16 +147,25 @@ class TileNode:
     # def __hash__(self):
     #     return hash(self.tile_id)
 
+
 class RoutingResultGraph:
     def __init__(self):
         self.nodes: Set[Union[RouteNode, TileNode]] = set()
         self.tile_id_to_tile: Dict[str, Union[RouteNode, TileNode]] = {}
-        self.edges: Set[(Union[RouteNode, TileNode], Union[RouteNode, TileNode])] = set()
-        self.edge_weights: Dict[(Union[RouteNode, TileNode], Union[RouteNode, TileNode]), int] = {}
+        self.edges: Set[
+            (Union[RouteNode, TileNode], Union[RouteNode, TileNode])
+        ] = set()
+        self.edge_weights: Dict[
+            (Union[RouteNode, TileNode], Union[RouteNode, TileNode]), int
+        ] = {}
         self.inputs: Set[Union[RouteNode, TileNode]] = set()
         self.outputs: Set[Union[RouteNode, TileNode]] = set()
-        self.sources: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
-        self.sinks: Dict[Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]] = {}
+        self.sources: Dict[
+            Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]
+        ] = {}
+        self.sinks: Dict[
+            Union[RouteNode, TileNode], List[Union[RouteNode, TileNode]]
+        ] = {}
         self.placement = {}
         self.id_to_ports = {}
         self.id_to_name: Dict[str, str] = {}
@@ -191,8 +235,11 @@ class RoutingResultGraph:
         if not self.shift_regs:
             regs = []
             for node in self.nodes:
-                if isinstance(node, TileNode) and node.tile_type == TileType.REG \
-                   and "d_reg_" in self.id_to_name[node.tile_id]:
+                if (
+                    isinstance(node, TileNode)
+                    and node.tile_type == TileType.REG
+                    and "d_reg_" in self.id_to_name[node.tile_id]
+                ):
                     regs.append(node)
             self.shift_regs = regs
         return self.shift_regs
@@ -219,8 +266,14 @@ class RoutingResultGraph:
         if not self.input_ios:
             ios = []
             for node in self.nodes:
-                if isinstance(node, TileNode) and (node.tile_type == TileType.IO16 \
-                   or node.tile_type == TileType.IO1) and len(self.sources[node]) == 0:
+                if (
+                    isinstance(node, TileNode)
+                    and (
+                        node.tile_type == TileType.IO16
+                        or node.tile_type == TileType.IO1
+                    )
+                    and len(self.sources[node]) == 0
+                ):
                     ios.append(node)
             self.input_ios = ios
         return self.input_ios
@@ -229,12 +282,18 @@ class RoutingResultGraph:
         if not self.output_ios:
             ios = []
             for node in self.nodes:
-                if isinstance(node, TileNode) and (node.tile_type == TileType.IO16 \
-                   or node.tile_type == TileType.IO1) and len(self.sinks[node]) == 0:
+                if (
+                    isinstance(node, TileNode)
+                    and (
+                        node.tile_type == TileType.IO16
+                        or node.tile_type == TileType.IO1
+                    )
+                    and len(self.sinks[node]) == 0
+                ):
                     ios.append(node)
             self.output_ios = ios
         return self.output_ios
-    
+
     def get_outputs_of_kernel(self, kernel):
         kernel_nodes = set()
         for node in self.nodes:
@@ -385,20 +444,52 @@ class RoutingResultGraph:
     def segment_to_node(self, segment, net_id, kernel=None):
         if segment[0] == "SB":
             track, x, y, side, io_, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type=RouteType.SB, track=track,
-                        side=side, io=io_, bit_width=bit_width, net_id=net_id, kernel=kernel)
+            node = RouteNode(
+                x,
+                y,
+                route_type=RouteType.SB,
+                track=track,
+                side=side,
+                io=io_,
+                bit_width=bit_width,
+                net_id=net_id,
+                kernel=kernel,
+            )
         elif segment[0] == "PORT":
             port_name, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type=RouteType.PORT,
-                        bit_width=bit_width, net_id=net_id, port=port_name, kernel=kernel)
+            node = RouteNode(
+                x,
+                y,
+                route_type=RouteType.PORT,
+                bit_width=bit_width,
+                net_id=net_id,
+                port=port_name,
+                kernel=kernel,
+            )
         elif segment[0] == "REG":
             reg_name, track, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type=RouteType.REG, track=track,
-                        bit_width=bit_width, net_id=net_id, reg_name=reg_name, port="reg", kernel=kernel)
+            node = RouteNode(
+                x,
+                y,
+                route_type=RouteType.REG,
+                track=track,
+                bit_width=bit_width,
+                net_id=net_id,
+                reg_name=reg_name,
+                port="reg",
+                kernel=kernel,
+            )
         elif segment[0] == "RMUX":
             rmux_name, x, y, bit_width = segment[1:]
-            node = RouteNode(x, y, route_type=RouteType.RMUX,
-                        bit_width=bit_width, net_id=net_id, rmux_name=rmux_name, kernel=kernel)
+            node = RouteNode(
+                x,
+                y,
+                route_type=RouteType.RMUX,
+                bit_width=bit_width,
+                net_id=net_id,
+                rmux_name=rmux_name,
+                kernel=kernel,
+            )
         else:
             raise ValueError("Unrecognized route type")
 
@@ -416,32 +507,39 @@ class RoutingResultGraph:
             for conn in conns:
                 if conn[0] not in self.id_to_ports:
                     self.id_to_ports[conn[0]] = []
-                self.id_to_ports[conn[0]].append(conn[1])       
+                self.id_to_ports[conn[0]].append(conn[1])
 
     def get_tile_at(self, x, y, port):
-        tiles = self.placement[(x,y)]
+        tiles = self.placement[(x, y)]
 
         for tile in tiles:
             if port in self.id_to_ports[tile]:
                 return tile
-       
+
         return None
 
     def get_or_create_reg_at(self, no_added_regs, x, y, track, bit_width, reg_name):
         if no_added_regs:
-            tiles = self.placement[(x,y)]
+            tiles = self.placement[(x, y)]
 
             for tile_id in tiles:
-                if tile_id[0] == 'r':
+                if tile_id[0] == "r":
                     return self.tile_id_to_tile[tile_id]
         else:
             tiles = self.get_tiles()
 
             for tile in tiles:
-                if tile.tile_type == TileType.REG and tile.x == x and tile.y == y and tile.track == track and tile.bit_width == bit_width and tile.reg_name == reg_name:
+                if (
+                    tile.tile_type == TileType.REG
+                    and tile.x == x
+                    and tile.y == y
+                    and tile.track == track
+                    and tile.bit_width == bit_width
+                    and tile.reg_name == reg_name
+                ):
                     return tile
 
-            node = TileNode(x, y, tile_id=f'r{self.added_regs}', kernel=None)
+            node = TileNode(x, y, tile_id=f"r{self.added_regs}", kernel=None)
             node.track = track
             node.bit_width = bit_width
             node.reg_name = reg_name
@@ -450,16 +548,18 @@ class RoutingResultGraph:
             self.id_to_name[node.tile_id] = f"pnr_pipelining{self.added_regs}"
 
             self.added_regs += 1
-            
+
             return node
 
     def update_edge_kernels(self):
         nodes = self.topological_sort()
-        
+
         for in_node in nodes:
             assert in_node.kernel is not None
             for node in self.sinks[in_node]:
-                if isinstance(node, RouteNode) or (node.tile_type == TileType.REG and node.kernel is None):
+                if isinstance(node, RouteNode) or (
+                    node.tile_type == TileType.REG and node.kernel is None
+                ):
                     node.kernel = in_node.kernel
                 else:
                     assert node.kernel is not None
@@ -482,8 +582,17 @@ class RoutingResultGraph:
                         # If one isn't hooked up correctly we need to fix it
                         # Pretty hacky but works
                         self.remove_edge((tile, sink))
-                        sink_copy = RouteNode(sink.x, sink.y, route_type=RouteType.REG, track=sink.track,
-                        bit_width=sink.bit_width, net_id=sink.net_id, reg_name=sink.reg_name, port="reg", kernel=sink.kernel) 
+                        sink_copy = RouteNode(
+                            sink.x,
+                            sink.y,
+                            route_type=RouteType.REG,
+                            track=sink.track,
+                            bit_width=sink.bit_width,
+                            net_id=sink.net_id,
+                            reg_name=sink.reg_name,
+                            port="reg",
+                            kernel=sink.kernel,
+                        )
 
                         self.tile_id_to_tile.pop(sink.tile_id)
                         sink.reg = True
@@ -530,23 +639,23 @@ class RoutingResultGraph:
                         visited.add(node)
         return kernel_output_nodes
 
-    def print_graph(self, filename, edge_weights = False):
+    def print_graph(self, filename, edge_weights=False):
         g = Digraph()
         for node in self.nodes:
-            g.node(str(node), label = f"{node}\n{node.kernel}")
+            g.node(str(node), label=f"{node}\n{node.kernel}")
 
         for edge in self.edges:
             g.edge(str(edge[0]), str(edge[1]))
-            
+
         g.render(filename=filename)
 
     def print_graph_tiles_only(self, filename):
         g = Digraph()
         for source in self.get_tiles():
-            if source.tile_id[0] == 'r':
-                g.node(str(source), label = f"{source}\n{source.kernel}", shape='box')
+            if source.tile_id[0] == "r":
+                g.node(str(source), label=f"{source}\n{source.kernel}", shape="box")
             else:
-                g.node(str(source), label = f"{source}\n{source.kernel}")
+                g.node(str(source), label=f"{source}\n{source.kernel}")
             for dest in self.get_tiles():
                 reachable = False
                 visited = set()
@@ -584,8 +693,15 @@ class KernelNodeType(Enum):
 
 
 class KernelNode:
-    def __init__(self, mem_id=None, kernel=None, kernel_type=None, latency=0,
-                 flush_latency=0, has_shift_regs=False):
+    def __init__(
+        self,
+        mem_id=None,
+        kernel=None,
+        kernel_type=None,
+        latency=0,
+        flush_latency=0,
+        has_shift_regs=False,
+    ):
         self.mem_id = mem_id
         self.kernel = kernel
         self.kernel_type = kernel_type
@@ -694,7 +810,16 @@ class KernelGraph:
 
         g.render(filename=filename)
 
-def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, no_added_regs=True):
+
+def construct_graph(
+    placement,
+    routes,
+    id_to_name,
+    netlist,
+    pe_latency=0,
+    pond_latency=0,
+    no_added_regs=True,
+):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
     graph.gen_placement(placement, netlist)
@@ -702,7 +827,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
     max_reg_id = 0
 
     for blk_id, place in placement.items():
-        if no_added_regs or blk_id[0] != 'r':
+        if no_added_regs or blk_id[0] != "r":
             if len(graph.id_to_name[blk_id].split("$")) > 0:
                 kernel = graph.id_to_name[blk_id].split("$")[0]
             else:
@@ -725,18 +850,32 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node1.x, node1.y, node1.track, node1.bit_width, node1.reg_name)
+                    reg_tile = graph.get_or_create_reg_at(
+                        no_added_regs,
+                        node1.x,
+                        node1.y,
+                        node1.track,
+                        node1.bit_width,
+                        node1.reg_name,
+                    )
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
-                    reg_tile = graph.get_or_create_reg_at(no_added_regs, node2.x, node2.y, node2.track, node2.bit_width, node2.reg_name)
+                    reg_tile = graph.get_or_create_reg_at(
+                        no_added_regs,
+                        node2.x,
+                        node2.y,
+                        node2.track,
+                        node2.bit_width,
+                        node2.reg_name,
+                    )
                     graph.add_edge(node2, reg_tile)
-    
+
     graph.update_sources_and_sinks()
-    
+
     graph.fix_regs()
 
     id_to_input_ports = {}
@@ -744,7 +883,7 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
         for conn in conns[1:]:
             if conn[0] not in id_to_input_ports:
                 id_to_input_ports[conn[0]] = []
-            id_to_input_ports[conn[0]].append(conn[1])    
+            id_to_input_ports[conn[0]].append(conn[1])
 
     for tile in graph.get_tiles():
         tile_id = tile.tile_id
@@ -777,10 +916,10 @@ def construct_graph(placement, routes, id_to_name, netlist, pe_latency=0, pond_l
                     tile.input_port_latencies[port] = 0
                     tile.input_port_break_path[port] = False
         else:
-            if tile_id[0] == 'r':
+            if tile_id[0] == "r":
                 tile.input_port_latencies["reg"] = 1
                 tile.input_port_break_path["reg"] = True
-    
+
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
 
@@ -867,8 +1006,10 @@ def construct_kernel_graph(graph, new_latencies):
                                 visited.add(node)
 
                 if reachable and source_id != dest_id:
-                    kernel_graph.add_edge(kernel_graph.tile_id_to_tile[source_id], 
-                                          kernel_graph.tile_id_to_tile[dest_id])
+                    kernel_graph.add_edge(
+                        kernel_graph.tile_id_to_tile[source_id],
+                        kernel_graph.tile_id_to_tile[dest_id],
+                    )
 
     kernel_graph.update_sources_and_sinks()
 
