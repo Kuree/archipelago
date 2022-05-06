@@ -103,7 +103,8 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
 
-    placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, input_netlist[0], load_only, harden_flush, pipeline_config_interval)
+    if id_to_name is not None:
+        placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, input_netlist[0], load_only, harden_flush, pipeline_config_interval)
 
     # tear down
     if use_temp:
