@@ -3,32 +3,51 @@ import os
 import random
 import math
 import argparse
-
-from PIL import Image, ImageDraw
-from typing import Dict, List, Tuple, Set
-
 import glob
-
+from typing import Dict, List, Tuple, Set
 import pythunder
 import pycyclone
-
 from pycyclone.io import load_placement
 from archipelago.io import load_routing_result
-from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
+from archipelago.pnr_graph import (
+    RoutingResultGraph,
+    construct_graph,
+    TileType,
+    RouteType,
+    TileNode,
+    RouteNode,
+)
+
+try:
+    from PIL import Image, ImageDraw
+except:
+    Image = None
+    ImageDraw = None
 
 # Draw parameters
 GLOBAL_TILE_WIDTH = 200
 GLOBAL_TILE_MARGIN = 40
-GLOBAL_TILE_WIDTH_INNER = GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN
+GLOBAL_TILE_WIDTH_INNER = GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN
 GLOBAL_OFFSET_X = 20
 GLOBAL_OFFSET_Y = 20
 GLOBAL_NUM_TRACK = 5
-GLOBAL_ARROW_DISTANCE = GLOBAL_TILE_WIDTH_INNER // (GLOBAL_NUM_TRACK*2+1)
+GLOBAL_ARROW_DISTANCE = GLOBAL_TILE_WIDTH_INNER // (GLOBAL_NUM_TRACK * 2 + 1)
 
 side_map = ["Right", "Bottom", "Left", "Top"]
 io_map = ["IN", "OUT"]
 
-def draw_arrow(draw, x, y, dir="UP", len=GLOBAL_TILE_MARGIN, color="Black", width=1, source_port=False, sink_port=False):
+
+def draw_arrow(
+    draw,
+    x,
+    y,
+    dir="UP",
+    len=GLOBAL_TILE_MARGIN,
+    color="Black",
+    width=1,
+    source_port=False,
+    sink_port=False,
+):
     if dir == "UP":
         dx = 0
         dy = -len
@@ -52,29 +71,32 @@ def draw_arrow(draw, x, y, dir="UP", len=GLOBAL_TILE_MARGIN, color="Black", widt
     else:
         print("[Error] unsupported arrow direction")
         exit()
-    xy = [(x,y), (x+dx, y+dy)]
+    xy = [(x, y), (x + dx, y + dy)]
     if dir == "UP" or dir == "DOWN":
-        lxy = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
-        rxy = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+        lxy = [(x + dx, y + dy), (x + int(dy * rx), y + int(dy * ry))]
+        rxy = [(x + dx, y + dy), (x + int(-dy * rx), y + int(dy * ry))]
     else:
-        lxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
-        rxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
+        lxy = [(x + dx, y + dy), (x + int(dx * rx), y + int(-dx * ry))]
+        rxy = [(x + dx, y + dy), (x + int(dx * rx), y + int(dx * ry))]
     draw.line(xy=xy, fill=color, width=width)
     draw.line(xy=lxy, fill=color, width=width)
     draw.line(xy=rxy, fill=color, width=width)
 
-    pw = (GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN)/40
+    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 40
     if source_port:
-        xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+        xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
         draw.polygon(xy=xy, fill="Green", outline="Black", width=1)
 
     if sink_port:
-        x += dx 
+        x += dx
         y += dy
-        xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+        xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
         draw.polygon(xy=xy, fill="Green", outline="Black", width=1)
 
-def draw_diagonal_arrow(draw, x, y, dir, x2, y2, dir2="UP", len=GLOBAL_TILE_MARGIN, color="Black", width=1):
+
+def draw_diagonal_arrow(
+    draw, x, y, dir, x2, y2, dir2="UP", len=GLOBAL_TILE_MARGIN, color="Black", width=1
+):
     if dir == "UP":
         dx = 0
         dy = -len
@@ -98,13 +120,13 @@ def draw_diagonal_arrow(draw, x, y, dir, x2, y2, dir2="UP", len=GLOBAL_TILE_MARG
     else:
         print("[Error] unsupported arrow direction")
         exit()
-    xy = [(x,y), (x+dx, y+dy)]
+    xy = [(x, y), (x + dx, y + dy)]
     if dir == "UP" or dir == "DOWN":
-        lxy = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
-        rxy = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+        lxy = [(x + dx, y + dy), (x + int(dy * rx), y + int(dy * ry))]
+        rxy = [(x + dx, y + dy), (x + int(-dy * rx), y + int(dy * ry))]
     else:
-        lxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
-        rxy = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
+        lxy = [(x + dx, y + dy), (x + int(dx * rx), y + int(-dx * ry))]
+        rxy = [(x + dx, y + dy), (x + int(dx * rx), y + int(dx * ry))]
 
     if dir2 == "UP":
         dx = 0
@@ -129,19 +151,19 @@ def draw_diagonal_arrow(draw, x, y, dir, x2, y2, dir2="UP", len=GLOBAL_TILE_MARG
     else:
         print("[Error] unsupported arrow direction")
         exit()
-    xy2 = [(x2,y2), (x2+dx, y2+dy)]
+    xy2 = [(x2, y2), (x2 + dx, y2 + dy)]
     if dir2 == "UP" or dir2 == "DOWN":
-        lxy2 = [(x+dx, y+dy), (x+int(dy*rx), y+int(dy*ry))]
-        rxy2 = [(x+dx, y+dy), (x+int(-dy*rx), y+int(dy*ry))]
+        lxy2 = [(x + dx, y + dy), (x + int(dy * rx), y + int(dy * ry))]
+        rxy2 = [(x + dx, y + dy), (x + int(-dy * rx), y + int(dy * ry))]
     else:
-        lxy2 = [(x+dx, y+dy), (x+int(dx*rx), y+int(-dx*ry))]
-        rxy2 = [(x+dx, y+dy), (x+int(dx*rx), y+int(dx*ry))]
+        lxy2 = [(x + dx, y + dy), (x + int(dx * rx), y + int(-dx * ry))]
+        rxy2 = [(x + dx, y + dy), (x + int(dx * rx), y + int(dx * ry))]
 
-    
     new_xy = [xy[0], xy2[1]]
     draw.line(xy=new_xy, fill=color, width=width)
     # draw.line(xy=lxy, fill=color, width=width)
     # draw.line(xy=rxy, fill=color, width=width)
+
 
 def draw_arrow_between_sb(draw, node, node2, color="Black", width=1):
     tile_x = node.x
@@ -156,140 +178,334 @@ def draw_arrow_between_sb(draw, node, node2, color="Black", width=1):
     io2 = io_map[node2.io]
     track_id2 = node2.track
 
-    if side=="Top":
-        if io=="IN":
+    if side == "Top":
+        if io == "IN":
             dir = "DOWN"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
-        elif io=="OUT":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH
+        elif io == "OUT":
             dir = "UP"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH
-    elif side=="Right":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y * GLOBAL_TILE_WIDTH
+    elif side == "Right":
+        if io == "IN":
             dir = "LEFT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-        elif io=="OUT":
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io == "OUT":
             dir = "RIGHT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-    elif side=="Bottom":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + tile_x * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+    elif side == "Bottom":
+        if io == "IN":
             dir = "UP"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-        elif io=="OUT":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io == "OUT":
             dir = "DOWN"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-    elif side=="Left":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y = (
+                GLOBAL_OFFSET_Y
+                + tile_y * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+    elif side == "Left":
+        if io == "IN":
             dir = "RIGHT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-        elif io=="OUT":
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io == "OUT":
             dir = "LEFT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
 
-    if side2=="Top":
-        if io2=="IN":
+    if side2 == "Top":
+        if io2 == "IN":
             dir2 = "DOWN"
-            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
-            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH
-        elif io2=="OUT":
+            x2 = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y2 = GLOBAL_OFFSET_Y + tile_y2 * GLOBAL_TILE_WIDTH
+        elif io2 == "OUT":
             dir2 = "UP"
-            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH
-    elif side2=="Right":
-        if io2=="IN":
+            x2 = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2 * GLOBAL_TILE_WIDTH
+    elif side2 == "Right":
+        if io2 == "IN":
             dir2 = "LEFT"
-            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
-        elif io2=="OUT":
+            x2 = GLOBAL_OFFSET_X + tile_x2 * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y2 = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io2 == "OUT":
             dir2 = "RIGHT"
-            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-    elif side2=="Bottom":
-        if io2=="IN":
+            x2 = (
+                GLOBAL_OFFSET_X
+                + tile_x2 * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+            y2 = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+    elif side2 == "Bottom":
+        if io2 == "IN":
             dir2 = "UP"
-            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-        elif io2=="OUT":
+            x2 = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y2 = GLOBAL_OFFSET_Y + tile_y2 * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io2 == "OUT":
             dir2 = "DOWN"
-            x2 = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
-            y2 = GLOBAL_OFFSET_Y + tile_y2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-    elif side2=="Left":
-        if io2=="IN":
+            x2 = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y2 = (
+                GLOBAL_OFFSET_Y
+                + tile_y2 * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+    elif side2 == "Left":
+        if io2 == "IN":
             dir2 = "RIGHT"
-            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH
-            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-        elif io2=="OUT":
+            x2 = GLOBAL_OFFSET_X + tile_x2 * GLOBAL_TILE_WIDTH
+            y2 = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io2 == "OUT":
             dir2 = "LEFT"
-            x2 = GLOBAL_OFFSET_X + tile_x2*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
-            y2 = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y2*GLOBAL_TILE_WIDTH + (track_id2+1)*GLOBAL_ARROW_DISTANCE
-    draw_diagonal_arrow(draw=draw, x=x, y=y, dir=dir, x2=x2, y2=y2, dir2=dir2, color=color, width=width)
+            x2 = GLOBAL_OFFSET_X + tile_x2 * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y2 = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y2 * GLOBAL_TILE_WIDTH
+                + (track_id2 + 1) * GLOBAL_ARROW_DISTANCE
+            )
+    draw_diagonal_arrow(
+        draw=draw, x=x, y=y, dir=dir, x2=x2, y2=y2, dir2=dir2, color=color, width=width
+    )
 
-def draw_arrow_on_tile(draw, tile_x, tile_y, side, io, track_id, color="Black", width=1, source_port=False, sink_port=False):
 
-    if side=="Top":
-        if io=="IN":
+def draw_arrow_on_tile(
+    draw,
+    tile_x,
+    tile_y,
+    side,
+    io,
+    track_id,
+    color="Black",
+    width=1,
+    source_port=False,
+    sink_port=False,
+):
+
+    if side == "Top":
+        if io == "IN":
             dir = "DOWN"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
-        elif io=="OUT":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH
+        elif io == "OUT":
             dir = "UP"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH
-    elif side=="Right":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y * GLOBAL_TILE_WIDTH
+    elif side == "Right":
+        if io == "IN":
             dir = "LEFT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-        elif io=="OUT":
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io == "OUT":
             dir = "RIGHT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-    elif side=="Bottom":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + tile_x * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+    elif side == "Bottom":
+        if io == "IN":
             dir = "UP"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
-        elif io=="OUT":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+            y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        elif io == "OUT":
             dir = "DOWN"
-            x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-            y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - GLOBAL_TILE_MARGIN
-    elif side=="Left":
-        if io=="IN":
+            x = (
+                GLOBAL_OFFSET_X
+                + GLOBAL_TILE_MARGIN
+                + tile_x * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+            y = (
+                GLOBAL_OFFSET_Y
+                + tile_y * GLOBAL_TILE_WIDTH
+                + GLOBAL_TILE_WIDTH
+                - GLOBAL_TILE_MARGIN
+            )
+    elif side == "Left":
+        if io == "IN":
             dir = "RIGHT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-        elif io=="OUT":
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+            )
+        elif io == "OUT":
             dir = "LEFT"
-            x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
-            y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-    draw_arrow(draw=draw, x=x, y=y, dir=dir, color=color, width=width, source_port=source_port, sink_port=sink_port)
+            x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+            y = (
+                GLOBAL_OFFSET_Y
+                + GLOBAL_TILE_MARGIN
+                + tile_y * GLOBAL_TILE_WIDTH
+                + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+            )
+    draw_arrow(
+        draw=draw,
+        x=x,
+        y=y,
+        dir=dir,
+        color=color,
+        width=width,
+        source_port=source_port,
+        sink_port=sink_port,
+    )
 
 
 def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
-    
-    if "NORTH" in reg_name:
-        x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-        y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH
-    elif "EAST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH 
-        y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1+GLOBAL_NUM_TRACK)*GLOBAL_ARROW_DISTANCE
-    elif "SOUTH" in reg_name:
-        x = GLOBAL_OFFSET_X + GLOBAL_TILE_MARGIN + tile_x*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
-        y = GLOBAL_OFFSET_Y + tile_y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH 
-    elif "WEST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x*GLOBAL_TILE_WIDTH 
-        y = GLOBAL_OFFSET_Y + GLOBAL_TILE_MARGIN + tile_y*GLOBAL_TILE_WIDTH + (track_id+1)*GLOBAL_ARROW_DISTANCE
 
-    pw = (GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN)/20
-    xy = [(x-pw,y-pw), (x+pw,y-pw), (x+pw,y+pw), (x-pw,y+pw)]
+    if "NORTH" in reg_name:
+        x = (
+            GLOBAL_OFFSET_X
+            + GLOBAL_TILE_MARGIN
+            + tile_x * GLOBAL_TILE_WIDTH
+            + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+        )
+        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH
+    elif "EAST" in reg_name:
+        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        y = (
+            GLOBAL_OFFSET_Y
+            + GLOBAL_TILE_MARGIN
+            + tile_y * GLOBAL_TILE_WIDTH
+            + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
+        )
+    elif "SOUTH" in reg_name:
+        x = (
+            GLOBAL_OFFSET_X
+            + GLOBAL_TILE_MARGIN
+            + tile_x * GLOBAL_TILE_WIDTH
+            + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+        )
+        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+    elif "WEST" in reg_name:
+        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH
+        y = (
+            GLOBAL_OFFSET_Y
+            + GLOBAL_TILE_MARGIN
+            + tile_y * GLOBAL_TILE_WIDTH
+            + (track_id + 1) * GLOBAL_ARROW_DISTANCE
+        )
+
+    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 20
+    xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
     draw.polygon(xy=xy, fill="Red", outline="Black", width=1)
+
 
 def find_last_sb(routing_result_graph, node):
     found_sb = False
@@ -297,7 +513,10 @@ def find_last_sb(routing_result_graph, node):
 
     curr_node = node
     while not found_sb and not found_port:
-        assert len(routing_result_graph.sources[curr_node]) == 1, (curr_node, routing_result_graph.sources[curr_node])
+        assert len(routing_result_graph.sources[curr_node]) == 1, (
+            curr_node,
+            routing_result_graph.sources[curr_node],
+        )
 
         source = routing_result_graph.sources[curr_node][0]
 
@@ -313,8 +532,14 @@ def find_last_sb(routing_result_graph, node):
     else:
         return None
 
+
 def draw_used_routes(draw, routing_result_graph, width):
-    color = lambda : (random.randint(0, 128), random.randint(0, 255), random.randint(0, 255), 255)
+    color = lambda: (
+        random.randint(0, 128),
+        random.randint(0, 255),
+        random.randint(0, 255),
+        255,
+    )
     net_colors = {}
 
     for node in routing_result_graph.get_routes():
@@ -325,46 +550,82 @@ def draw_used_routes(draw, routing_result_graph, width):
             source_port = False
             sink_port = False
             for source in routing_result_graph.sources[node]:
-                if isinstance(source, RouteNode) and source.route_type == RouteType.PORT:
+                if (
+                    isinstance(source, RouteNode)
+                    and source.route_type == RouteType.PORT
+                ):
                     source_port = True
             for sink in routing_result_graph.sinks[node]:
                 if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT:
-                    sink_port = True                
+                    sink_port = True
 
-            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=10, source_port=source_port, sink_port = sink_port)
+            draw_arrow_on_tile(
+                draw,
+                node.x,
+                node.y,
+                side_map[node.side],
+                io_map[node.io],
+                node.track,
+                color=net_colors[node.net_id],
+                width=10,
+                source_port=source_port,
+                sink_port=sink_port,
+            )
 
             last_sb = find_last_sb(routing_result_graph, node)
 
             if last_sb:
-                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=10)
+                draw_arrow_between_sb(
+                    draw, node, last_sb, color=net_colors[node.net_id], width=10
+                )
         elif node.route_type == RouteType.REG and node.bit_width == width:
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
 
 
 def draw_crit_routes(draw, routing_result_graph, width, crit_nodes):
-    color = lambda : (255, 0, 0, 255)
+    color = lambda: (255, 0, 0, 255)
     net_colors = {}
 
     for node in routing_result_graph.get_routes():
-        if node.route_type == RouteType.SB and node.bit_width == width and node in crit_nodes:
+        if (
+            node.route_type == RouteType.SB
+            and node.bit_width == width
+            and node in crit_nodes
+        ):
             if node.net_id not in net_colors:
                 net_colors[node.net_id] = color()
 
             source_port = False
             sink_port = False
             for source in routing_result_graph.sources[node]:
-                if isinstance(source, RouteNode) and source.route_type == RouteType.PORT:
+                if (
+                    isinstance(source, RouteNode)
+                    and source.route_type == RouteType.PORT
+                ):
                     source_port = True
             for sink in routing_result_graph.sinks[node]:
                 if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT:
-                    sink_port = True                
+                    sink_port = True
 
-            draw_arrow_on_tile(draw, node.x, node.y, side_map[node.side], io_map[node.io], node.track, color=net_colors[node.net_id], width=10, source_port=source_port, sink_port = sink_port)
+            draw_arrow_on_tile(
+                draw,
+                node.x,
+                node.y,
+                side_map[node.side],
+                io_map[node.io],
+                node.track,
+                color=net_colors[node.net_id],
+                width=10,
+                source_port=source_port,
+                sink_port=sink_port,
+            )
 
             last_sb = find_last_sb(routing_result_graph, node)
 
             if last_sb:
-                draw_arrow_between_sb(draw, node, last_sb, color=net_colors[node.net_id], width=10)
+                draw_arrow_between_sb(
+                    draw, node, last_sb, color=net_colors[node.net_id], width=10
+                )
         elif node.route_type == RouteType.REG and node.bit_width == width:
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
 
@@ -391,12 +652,12 @@ def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, w
         color_tile = "lightgrey"
         color_line = "Black"
         pr = 0.4
-    px=GLOBAL_OFFSET_X + x*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
-    py=GLOBAL_OFFSET_Y + y*GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
-    pw = GLOBAL_TILE_WIDTH - 2*GLOBAL_TILE_MARGIN
-    xy = [(px,py), (px+pw,py), (px+pw,py+pw), (px,py+pw)]
-    txy = (px + int(pw*pr), py + int(pw*0.4))
-    t2xy = (px + int(pw*pr), py + int(pw*0.6))
+    px = GLOBAL_OFFSET_X + x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+    py = GLOBAL_OFFSET_Y + y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
+    pw = GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN
+    xy = [(px, py), (px + pw, py), (px + pw, py + pw), (px, py + pw)]
+    txy = (px + int(pw * pr), py + int(pw * 0.4))
+    t2xy = (px + int(pw * pr), py + int(pw * 0.6))
     draw.polygon(xy=xy, fill=color_tile, outline=color_line, width=width)
 
     if tile_type:
@@ -404,8 +665,9 @@ def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, w
     if tile_id:
         draw.text(xy=t2xy, text=tile_id, fill="Black")
     # draw its coordinate
-    cxy = (px + int(pw*0.25), py + int(pw*0.15))
+    cxy = (px + int(pw * 0.25), py + int(pw * 0.15))
     draw.text(xy=cxy, text=f"({x},{y})", fill="Black")
+
 
 def draw_all_tiles(draw, graph):
     for x, y in graph:
@@ -420,16 +682,40 @@ def draw_all_tiles(draw, graph):
             sbs = switchbox.get_sbs_by_side(side)
             for io in ["IN", "OUT"]:
                 for i in range(len(sbs)):
-                    draw_arrow_on_tile(draw, tile_x=x, tile_y=y, side=side.name, io=io, track_id=i%GLOBAL_NUM_TRACK)
+                    draw_arrow_on_tile(
+                        draw,
+                        tile_x=x,
+                        tile_y=y,
+                        side=side.name,
+                        io=io,
+                        track_id=i % GLOBAL_NUM_TRACK,
+                    )
+
 
 def draw_used_tiles(draw, graph):
     tiles = graph.get_tiles()
-    blk_id_list = {tile.tile_id:tile for tile in tiles}
+    blk_id_list = {tile.tile_id: tile for tile in tiles}
     for blk_id, node in blk_id_list.items():
-        create_tile(draw=draw, x=node.x, y=node.y, tile_type=node.tile_type, tile_id=blk_id)
+        create_tile(
+            draw=draw, x=node.x, y=node.y, tile_type=node.tile_type, tile_id=blk_id
+        )
+
+
+def load_graph(graph_files):
+    graph_result = {}
+    for graph_file in graph_files:
+        bit_width = os.path.splitext(graph_file)[0]
+        bit_width = int(os.path.basename(bit_width))
+        graph = pycyclone.io.load_routing_graph(graph_file)
+        graph_result[bit_width] = graph
+    return graph_result
 
 
 def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
+
+    if not Image or not ImageDraw:
+        print("Please install python package Pillow to generate visualization")
+        return
 
     array_width = 0
     array_height = 0
@@ -439,12 +725,11 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
     array_width += 1
     array_height += 1
 
-    
     for width, graph in routing_graphs.items():
         # initialize image
-        img_width = array_width*GLOBAL_TILE_WIDTH + 3*GLOBAL_OFFSET_X
-        img_height = array_height*GLOBAL_TILE_WIDTH + 3*GLOBAL_OFFSET_X
-        img = Image.new('RGB', (img_width, img_height), "White")
+        img_width = array_width * GLOBAL_TILE_WIDTH + 3 * GLOBAL_OFFSET_X
+        img_height = array_height * GLOBAL_TILE_WIDTH + 3 * GLOBAL_OFFSET_X
+        img = Image.new("RGB", (img_width, img_height), "White")
         draw = ImageDraw.Draw(img)
         # draw all the tiles
         draw_all_tiles(draw, graph)
@@ -456,14 +741,4 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
         if crit_nodes is not None:
             draw_crit_routes(draw, routing_result_graph, width, crit_nodes)
 
-        img.save(f'{app_dir}/pnr_result_{width}.png', format='PNG')
-
-def load_graph(graph_files):
-    graph_result = {}
-    for graph_file in graph_files:
-        bit_width = os.path.splitext(graph_file)[0]
-        bit_width = int(os.path.basename(bit_width))
-        graph = pycyclone.io.load_routing_graph(graph_file)
-        graph_result[bit_width] = graph
-    return graph_result
-
+        img.save(f"{app_dir}/pnr_result_{width}.png", format="PNG")

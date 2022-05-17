@@ -6,12 +6,29 @@ from pycyclone.io import load_placement
 import pycyclone
 import pythunder
 from archipelago.io import load_routing_result
-from archipelago.pnr_graph import RoutingResultGraph, construct_graph, TileType, RouteType, TileNode, RouteNode
+from archipelago.pnr_graph import (
+    RoutingResultGraph,
+    construct_graph,
+    TileType,
+    RouteType,
+    TileNode,
+    RouteNode,
+)
 from archipelago.visualize import visualize_pnr
 
+
 class PathComponents:
-    def __init__(self, glbs=0, hhops=0, uhops=0, dhops=0, pes=0, mems=0,
-                 available_regs=0, parent=None):
+    def __init__(
+        self,
+        glbs=0,
+        hhops=0,
+        uhops=0,
+        dhops=0,
+        pes=0,
+        mems=0,
+        available_regs=0,
+        parent=None,
+    ):
         self.glbs = glbs
         self.hhops = hhops
         self.uhops = uhops
@@ -20,16 +37,18 @@ class PathComponents:
         self.mems = mems
         self.available_regs = available_regs
         self.parent = parent
-        self.delays = json.load(open(os.path.dirname(os.path.realpath(__file__)) + "/sta_delays.json"))
-        
+        self.delays = json.load(
+            open(os.path.dirname(os.path.realpath(__file__)) + "/sta_delays.json")
+        )
+
     def get_total(self):
         total = 0
-        total += self.glbs * self.delays['glb']
-        total += self.hhops * self.delays['sb_horiz']
-        total += self.uhops * self.delays['sb_up']
-        total += self.dhops * self.delays['sb_down']
-        total += self.pes * self.delays['pe']
-        total += self.mems * self.delays['mem']
+        total += self.glbs * self.delays["glb"]
+        total += self.hhops * self.delays["sb_horiz"]
+        total += self.uhops * self.delays["sb_up"]
+        total += self.dhops * self.delays["sb_down"]
+        total += self.pes * self.delays["pe"]
+        total += self.mems * self.delays["mem"]
         return total
 
 
@@ -41,7 +60,9 @@ def sta(graph):
         comp = PathComponents()
         components = [comp]
 
-        if len(graph.sources[node]) == 0 and (node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1):
+        if len(graph.sources[node]) == 0 and (
+            node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1
+        ):
             comp = PathComponents()
             comp.glbs = 1
             components = [comp]
@@ -100,8 +121,13 @@ def sta(graph):
         timing_info[node] = max_comp
 
     node_to_timing = {node: timing_info[node].get_total() for node in graph.nodes}
-    node_to_timing = dict(sorted(reversed(
-        list(node_to_timing.items())), key=lambda item: item[1], reverse=True))
+    node_to_timing = dict(
+        sorted(
+            reversed(list(node_to_timing.items())),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    )
     max_node = list(node_to_timing.keys())[0]
     max_delay = list(node_to_timing.values())[0]
 
@@ -109,20 +135,29 @@ def sta(graph):
 
     print("\nCritical Path Info:")
     print("\tMaximum clock frequency:", clock_speed, "MHz")
-    print("\tCritical Path:", max_delay, "ns")
-    print(f"\t{max_node}", "glb:", timing_info[max_node].glbs,
-          "horiz hops:", timing_info[max_node].hhops,
-          "up hops:",  timing_info[max_node].uhops,
-          "down hops:",  timing_info[max_node].dhops,
-          "pes:", timing_info[max_node].pes,
-          "mems:", timing_info[max_node].mems, "\n")
-
+    print("\tCritical Path:", max_delay, "ps")
+    print(
+        f"\t{max_node}",
+        "glb:",
+        timing_info[max_node].glbs,
+        "horiz hops:",
+        timing_info[max_node].hhops,
+        "up hops:",
+        timing_info[max_node].uhops,
+        "down hops:",
+        timing_info[max_node].dhops,
+        "pes:",
+        timing_info[max_node].pes,
+        "mems:",
+        timing_info[max_node].mems,
+        "\n",
+    )
 
     curr_node = max_node
     crit_path = []
     crit_path.append((curr_node, timing_info[curr_node].get_total()))
     crit_nodes = []
-    while(True):
+    while True:
         crit_nodes.append(curr_node)
         curr_node = timing_info[curr_node].parent
         crit_path.append((curr_node, timing_info[curr_node].get_total()))
@@ -132,6 +167,7 @@ def sta(graph):
     crit_path.reverse()
 
     return clock_speed, crit_path, crit_nodes
+
 
 def load_id_to_name(id_filename):
     fin = open(id_filename, "r")
@@ -143,6 +179,7 @@ def load_id_to_name(id_filename):
 
     return id_to_name
 
+
 def load_graph(graph_files):
     graph_result = {}
     for graph_file in graph_files:
@@ -152,10 +189,12 @@ def load_graph(graph_files):
         graph_result[bit_width] = graph
     return graph_result
 
+
 def parse_args():
     parser = argparse.ArgumentParser("CGRA Retiming tool")
-    parser.add_argument("-a", "--app", "-d", required=True,
-                        dest="application", type=str)
+    parser.add_argument(
+        "-a", "--app", "-d", required=True, dest="application", type=str
+    )
     parser.add_argument("-v", "--visualize", action="store_true")
     args = parser.parse_args()
     dirname = os.path.join(args.application, "bin")
@@ -170,10 +209,16 @@ def parse_args():
 
 
 def main():
-    packed_file, placement_file, routing_file, id_to_name_filename, visualize = parse_args()
+    (
+        packed_file,
+        placement_file,
+        routing_file,
+        id_to_name_filename,
+        visualize,
+    ) = parse_args()
 
     netlist, buses = pythunder.io.load_netlist(packed_file)
-    
+
     if os.path.isfile(id_to_name_filename):
         id_to_name = load_id_to_name(id_to_name_filename)
     else:
@@ -182,18 +227,15 @@ def main():
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    if 'PIPELINED' in os.environ and os.environ['PIPELINED'] == '1':
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
         pe_latency = 1
     else:
         pe_latency = 0
 
-    if 'POND_PIPELINED' in os.environ and os.environ['POND_PIPELINED'] == '1':
-        pond_latency = 1
-    else:
-        pond_latency = 0
+    routing_result_graph = construct_graph(
+        placement, routing, id_to_name, netlist, pe_latency, 0
+    )
 
-    routing_result_graph = construct_graph(placement, routing, id_to_name, netlist, pe_latency, pond_latency, no_added_regs=False)
-    
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
     if visualize:
@@ -203,7 +245,7 @@ def main():
         graph16 = os.path.join(dirname, "16.graph")
         assert os.path.exists(graph16), route + " does not exists"
         routing_graphs = load_graph([graph1, graph16])
-        
+
         visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
 
 
