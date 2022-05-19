@@ -887,7 +887,9 @@ def construct_kernel_graph(graph, new_latencies):
     kernel_graph = KernelGraph()
 
     compute_tiles = set()
-    for tile in graph.get_pes() + graph.get_regs() + graph.get_ponds():
+    for tile in (
+        graph.get_pes() + graph.get_regs() + graph.get_ponds() + graph.get_input_ios()
+    ):
         if tile not in graph.get_shift_regs():
             compute_tiles.add(tile)
 
@@ -899,12 +901,12 @@ def construct_kernel_graph(graph, new_latencies):
                 kernel_graph.add_node(kernel_node)
                 kernel_node.latency = new_latencies[source_id]
                 kernel_node.kernel_type = KernelNodeType.COMPUTE
-        elif source in graph.get_input_ios():
-            source_id = source.tile_id
-            if source_id not in kernel_graph.tile_id_to_tile:
-                kernel_node = KernelNode(kernel=source_id)
-                kernel_graph.add_node(kernel_node)
-                kernel_node.kernel_type = KernelNodeType.IO
+        # elif source in graph.get_input_ios():
+        #     source_id = source.tile_id
+        #     if source_id not in kernel_graph.tile_id_to_tile:
+        #         kernel_node = KernelNode(kernel=source_id)
+        #         kernel_graph.add_node(kernel_node)
+        #         kernel_node.kernel_type = KernelNodeType.IO
         else:
             source_id = source.tile_id
             if source_id not in kernel_graph.tile_id_to_tile:
@@ -923,12 +925,12 @@ def construct_kernel_graph(graph, new_latencies):
                     kernel_graph.add_node(kernel_node)
                     kernel_node.latency = new_latencies[dest_id]
                     kernel_node.kernel_type = KernelNodeType.COMPUTE
-            elif dest in graph.get_input_ios():
-                dest_id = dest.tile_id
-                if dest_id not in kernel_graph.tile_id_to_tile:
-                    kernel_node = KernelNode(kernel=dest_id)
-                    kernel_graph.add_node(kernel_node)
-                    kernel_node.kernel_type = KernelNodeType.IO
+            # elif dest in graph.get_input_ios():
+            #     dest_id = dest.tile_id
+            #     if dest_id not in kernel_graph.tile_id_to_tile:
+            #         kernel_node = KernelNode(kernel=dest_id)
+            #         kernel_graph.add_node(kernel_node)
+            #         kernel_node.kernel_type = KernelNodeType.IO
             else:
                 dest_id = dest.tile_id
                 if dest_id not in kernel_graph.tile_id_to_tile:

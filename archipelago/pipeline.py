@@ -173,7 +173,6 @@ def calculate_latencies(kernel_graph, kernel_latencies):
         sorted_new_latencies[k] = new_latencies[k]
 
     for kernel, lat in kernel_latencies.items():
-
         if "glb" in kernel:
             new_lat = 0
         elif f"op_{kernel}" in sorted_new_latencies:
