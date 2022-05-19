@@ -117,31 +117,31 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
 
 
 def find_closest_match(kernel_target, candidates):
-    junk = [
-        "hcompute_",
-        "cgra_",
-        "glb_",
-        "global_wrapper_",
-        "clkwrk_",
-        "stencil_",
-        "op_",
-    ]
+    junk = ["hcompute", "cgra", "global", "wrapper", "clkwrk", "stencil", "op"]
 
     cleaned_candidates = candidates.copy()
     for idx, key in enumerate(candidates):
+        cleaned_candidates[idx] = cleaned_candidates[idx].split("_")
         for j in junk:
-            cleaned_candidates[idx] = cleaned_candidates[idx].replace(j, "")
+            if j in cleaned_candidates[idx]:
+                cleaned_candidates[idx] = [c for c in cleaned_candidates[idx] if c != j]
+    kernel_target = kernel_target.split("_")
+    if "clkwrk" in kernel_target:
+        del kernel_target[
+            kernel_target.index("clkwrk") : kernel_target.index("clkwrk") + 2
+        ]
 
     for j in junk:
-        kernel_target = kernel_target.replace(j, "")
+        if j in kernel_target:
+            kernel_target = [k for k in kernel_target if k != j]
 
     matches_and_ratios = []
 
     for idx, candidate in enumerate(cleaned_candidates):
         ratio = 0
-        if "io16" in candidate:
-            for a in kernel_target.split("_"):
-                if a in candidate.split("_"):
+        if "glb" not in candidate:
+            for a in candidate:
+                if a in kernel_target:
                     ratio += 1
         matches_and_ratios.append((candidates[idx], ratio))
 
@@ -172,17 +172,13 @@ def calculate_latencies(kernel_graph, kernel_latencies):
     for k in sorted(new_latencies, key=lambda a: len(str(a))):
         sorted_new_latencies[k] = new_latencies[k]
 
-    for kernel, lat in kernel_latencies.items():
-        if "glb" in kernel:
-            continue
-        elif f"op_{kernel}" in sorted_new_latencies:
-            new_lat = sorted_new_latencies[f"op_{kernel}"]
-        else:
-            match = find_closest_match(kernel, list(sorted_new_latencies.keys()))
-            new_lat = sorted_new_latencies[match]
-
-        if new_lat != None:
-            kernel_latencies[kernel] = new_lat
+    for graph_kernel, lat in sorted_new_latencies.items():
+        if "op_" in graph_kernel and graph_kernel.split("op_")[1] in kernel_latencies:
+            kernel_latencies[graph_kernel.split("op_")[1]] = lat
+        elif "io16" in graph_kernel:
+            # Used for input/output kernels
+            match = find_closest_match(graph_kernel, list(kernel_latencies.keys()))
+            kernel_latencies[match] = lat
 
     return kernel_latencies
 
