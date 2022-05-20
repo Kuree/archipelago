@@ -169,7 +169,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
 
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
     sorted_new_latencies = {}
-    for k in sorted(new_latencies, key=lambda a: len(str(a))):
+    for k in sorted(new_latencies, key=lambda a: len(str(a)), reverse=True):
         sorted_new_latencies[k] = new_latencies[k]
 
     for graph_kernel, lat in sorted_new_latencies.items():
@@ -179,7 +179,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
             # Used for input/output kernels
             match = find_closest_match(graph_kernel, list(kernel_latencies.keys()))
             kernel_latencies[match] = lat
-
+            
     return kernel_latencies
 
 
