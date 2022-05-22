@@ -61,5 +61,3 @@ def pnr_virtualize(interconnect, inputs, cwd, id_to_name, max_group):
                              fixed_pos=io_placement, max_num_col=num_col)
         result[cluster_id] = cluster_result, partition_id_to_name
     return result
-
-

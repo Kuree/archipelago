@@ -4,10 +4,11 @@ import shutil
 from .io import dump_packed_result
 from .place import place
 from .route import route
-from .io import dump_packing_result, load_routing_result, dump_placement_result
+from .io import load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
 import pycyclone
 from archipelago.pipeline import pipeline_pnr
+
 
 class PnRException(Exception):
     def __init__(self):
@@ -15,7 +16,7 @@ class PnRException(Exception):
 
 
 def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
-        app_name="", id_to_name=None, fixed_pos=None, max_num_col=None,
+        app_name="", id_to_name=None, fixed_pos=None, region=None,
         compact=False, copy_to_dir=None, max_frequency=None,
         shift_registers=False, harden_flush=False, pipeline_config_interval=0):
     if input_netlist is None and len(packed_file):
@@ -39,14 +40,14 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
             # if virtualization is turned on with canal, we can dynamically
             # dump the adjusted size and partition
             # we assume the netlist is already partitioned
-            # if compact is enabled, we need to compute the max_num_col
-            # and re-turn the function until we can have it
+            # if compact is enabled, we need to compute the region coordinates
+            # and re-run the function until we can have it
             if compact:
                 kargs["compact"] = False
                 for n in {"arch", "input_netlist"}:
                     kargs.pop(n)
                 return __compact_pnr(arch, input_netlist, **kargs)
-            arch.dump_pnr(cwd, "design", max_num_col=max_num_col)
+            arch.dump_pnr(cwd, "design", region=region)
             arch_file = os.path.join(cwd, "design.info")
         else:
             raise Exception("arch has to be either string or interconnect")
@@ -131,8 +132,9 @@ def __compact_pnr(arch, input_netlist, **kargs):
     # notice that python range is exclusive
     for col in range(start_size, arch.x_max + 1 + 1, group_size):
         try:
-            # force it to use the desired column
-            kargs["max_num_col"] = col
+            # calculate region based on the number of cols
+            x_max = arch.x_min + col - 1
+            kargs["region"] = ((arch.x_min, arch.y_min), (x_max, arch.y_max))
             return pnr(arch, input_netlist, **kargs)
         except PnRException:
             pass
