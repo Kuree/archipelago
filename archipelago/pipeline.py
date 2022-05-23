@@ -238,18 +238,17 @@ def update_kernel_latencies(
 
 def dump_id_to_name(app_dir, id_to_name):
     id_name = os.path.join(app_dir, "design.id_to_name")
-    fout = open(id_name, "w")
-    for id_, name in id_to_name.items():
-        fout.write(f"{id_}: {name}\n")
+    with open(id_name, "w") as f:
+        for id_, name in id_to_name.items():
+            f.write(f"{id_}: {name}\n")
 
 
 def load_id_to_name(id_filename):
-    fin = open(id_filename, "r")
-    lines = fin.readlines()
-    id_to_name = {}
-
-    for line in lines:
-        id_to_name[line.split(": ")[0]] = line.split(": ")[1].rstrip()
+    with open(id_filename, "r") as f:
+        lines = f.readlines()
+        id_to_name = {}
+        for line in lines:
+            id_to_name[line.split(": ")[0]] = line.split(": ")[1].rstrip()
 
     return id_to_name
 
