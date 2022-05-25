@@ -85,7 +85,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
 def flush_cycles(graph, harden_flush, pipeline_config_interval):
     if harden_flush:
         flush_cycles = {}
-        for mem in graph.get_mems():
+        for mem in graph.get_mems() + graph.get_ponds():
             if mem.y == 0:
                 flush_cycles[mem] = 0
             else:
@@ -97,7 +97,7 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
         assert io.kernel == "io1in_reset"
         flush_cycles = {}
 
-        for mem in graph.get_mems():
+        for mem in graph.get_mems() + graph.get_ponds():
             for parent_node in graph.sources[mem]:
                 if parent_node.port == "flush":
                     break

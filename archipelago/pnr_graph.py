@@ -714,6 +714,9 @@ def construct_graph(
 
     graph.update_sources_and_sinks()
 
+    while graph.fix_cycles():
+        pass
+
     graph.fix_regs(netlist)
 
     id_to_input_ports = {}
