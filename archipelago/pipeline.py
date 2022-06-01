@@ -33,6 +33,8 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
         if len(graph.sources[node]) == 0:
             if node in graph.get_pes():
                 cycles = {None}
+            elif node in graph.get_input_ios():
+                cycles = {node.input_port_latencies["output"]}
             else:
                 cycles = {0}
 
@@ -179,7 +181,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
             # Used for input/output kernels
             match = find_closest_match(graph_kernel, list(kernel_latencies.keys()))
             kernel_latencies[match] = lat
-            
+
     return kernel_latencies
 
 
@@ -275,7 +277,20 @@ def pipeline_pnr(
     else:
         pe_cycles = 0
 
-    graph = construct_graph(placement, routing, id_to_name, netlist, pe_cycles, 0)
+    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "1":
+        io_cycles = 1
+    else:
+        io_cycles = 0
+
+    graph = construct_graph(
+        placement,
+        routing,
+        id_to_name,
+        netlist,
+        pe_latency=pe_cycles,
+        pond_latency=0,
+        io_latency=io_cycles,
+    )
 
     curr_freq, crit_path, crit_nets = sta(graph)
 

@@ -658,7 +658,7 @@ class RoutingResultGraph:
 
 
 def construct_graph(
-    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0
+    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
@@ -754,12 +754,17 @@ def construct_graph(
                     tile.input_port_latencies[port] = pond_latency
                     tile.input_port_break_path[port] = True
                 elif tile.tile_type == TileType.IO1 or tile.tile_type == TileType.IO16:
-                    tile.input_port_latencies[port] = 0
-                    tile.input_port_break_path[port] = False
+                    tile.input_port_latencies[port] = 1
+                    tile.input_port_break_path[port] = True
         else:
             if tile_id[0] == "r":
-                tile.input_port_latencies["reg"] = 1
-                tile.input_port_break_path["reg"] = True
+                tile.input_port_latencies["reg"] = io_latency
+                tile.input_port_break_path["reg"] = io_latency != 0
+
+    # Need special case for input IO tiles since they don't have an "input" port
+    for tile in graph.get_input_ios():
+        tile.input_port_latencies["output"] = io_latency
+        tile.input_port_break_path["output"] = io_latency != 0
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
