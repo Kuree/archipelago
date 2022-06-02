@@ -580,7 +580,7 @@ class RoutingResultGraph:
                         kernel = self.id_to_name[regs[0]].split("$")[0]
                     else:
                         kernel = None
-                        breakpoint()
+
                     node.kernel = kernel
 
                 else:
@@ -600,29 +600,15 @@ class RoutingResultGraph:
                     prev_tile_found = True
 
             if prev_node.kernel != None:
-                next_tile_found = False
-                next_node = node
-                while not next_tile_found:
-                    assert len(self.sinks[next_node]) > 0
-                    next_node = self.sinks[next_node][0]
-
-                    if isinstance(next_node, TileNode):
-                        next_tile_found = True
-
-                if prev_node.kernel == next_node.kernel:
-                    node.kernel = prev_node.kernel
-                    resolved = True
-                else:
-                    for net_id, net in netlist.items():
-                        if net[0][0] == prev_node.tile_id:
-                            for id_ in net[1:]:
-                                if id_[0] in regs:
-                                    node.tile_id = id_[0]
-                                    node.kernel = self.id_to_name[node.tile_id].split(
-                                        "$"
-                                    )[0]
-                                    resolved = True
-
+                for net_id, net in netlist.items():
+                    if net[0][0] == prev_node.tile_id:
+                        for id_ in net[1:]:
+                            if id_[0] in regs:
+                                resolved = True
+                                node.tile_id = id_[0]
+                                node.kernel = self.id_to_name[node.tile_id].split(
+                                    "$"
+                                )[0]
             if not resolved:
                 unsolved_regs.append((node, regs))
 
