@@ -181,7 +181,6 @@ def calculate_latencies(kernel_graph, kernel_latencies):
             # Used for input/output kernels
             match = find_closest_match(graph_kernel, list(kernel_latencies.keys()))
             kernel_latencies[match] = lat
-
     return kernel_latencies
 
 
@@ -229,13 +228,13 @@ def update_kernel_latencies(
         ]
 
     fout = open(kernel_latencies_file, "w")
-    fout.write(json.dumps(matched_kernel_latencies))
+    fout.write(json.dumps(matched_kernel_latencies, indent=4))
 
     fout = open(flush_latencies_file, "w")
-    fout.write(json.dumps(matched_flush_latencies))
+    fout.write(json.dumps(matched_flush_latencies, indent=4))
 
     fout = open(pond_latencies_file, "w")
-    fout.write(json.dumps(pond_latencies))
+    fout.write(json.dumps(pond_latencies, indent=4))
 
 
 def dump_id_to_name(app_dir, id_to_name):
