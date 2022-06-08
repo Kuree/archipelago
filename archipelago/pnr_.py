@@ -70,31 +70,42 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     # get placement name
     placement_filename = os.path.join(cwd, app_name + ".place")
 
-    # if we have fixed
-    if fixed_pos is not None:
-        assert isinstance(fixed_pos, dict)
-        dump_placement_result(fixed_pos, placement_filename, id_to_name)
-        has_fixed = True
-    else:
-        has_fixed = False
 
-    # do the place and route
-    if not load_only:
-        place(packed_file, layout_filename, placement_filename, has_fixed)
-    # making sure the placement result is there
-    if not os.path.isfile(placement_filename):
-        raise PnRException()
+    routed = False
+    pnr_placer_exp = 1
+    while not routed and pnr_placer_exp < 10:
+        # if we have fixed
+        if fixed_pos is not None:
+            assert isinstance(fixed_pos, dict)
+            dump_placement_result(fixed_pos, placement_filename, id_to_name)
+            has_fixed = True
+        else:
+            has_fixed = False
+        # do the place and route
+        if not load_only:
+            os.environ["PNR_PLACER_EXP"] = str(pnr_placer_exp)
+            print("Trying routing with PnR placer exp:", os.environ["PNR_PLACER_EXP"])
+            place(packed_file, layout_filename, placement_filename, has_fixed)
+        # making sure the placement result is there
+        if not os.path.isfile(placement_filename):
+            raise PnRException()
 
-    route_filename = os.path.join(cwd, app_name + ".route")
-    if max_frequency is not None:
-        wave_filename = os.path.join(cwd, app_name + ".wave")
-    else:
-        wave_filename = None
+        route_filename = os.path.join(cwd, app_name + ".route")
+        if max_frequency is not None:
+            wave_filename = os.path.join(cwd, app_name + ".wave")
+        else:
+            wave_filename = None
 
-    if not load_only:
-        route(packed_file, placement_filename, graph_path, route_filename,
-              max_frequency, layout_filename, wave_info=wave_filename,
-              shift_registers=shift_registers)
+        if not load_only:
+            try:
+                route(packed_file, placement_filename, graph_path, route_filename,
+                    max_frequency, layout_filename, wave_info=wave_filename,
+                    shift_registers=shift_registers)
+                routed = True
+            except:
+                pnr_placer_exp += 1
+        else:
+            routed = True
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
