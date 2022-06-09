@@ -71,9 +71,14 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     placement_filename = os.path.join(cwd, app_name + ".place")
 
 
-    routed = False
     pnr_placer_exp = 1
-    while not routed and pnr_placer_exp < 10:
+    pnr_placer_exp_set = False
+    if "PNR_PLACER_EXP" in os.environ and os.environ["PNR_PLACER_EXP"].isnumeric():
+        pnr_placer_exp = int(os.environ["PNR_PLACER_EXP"])
+        pnr_placer_exp_set = True
+        
+    routed = False
+    while not routed and (pnr_placer_exp < 10 or pnr_placer_exp_set):
         # if we have fixed
         if fixed_pos is not None:
             assert isinstance(fixed_pos, dict)
@@ -84,7 +89,7 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
         # do the place and route
         if not load_only:
             os.environ["PNR_PLACER_EXP"] = str(pnr_placer_exp)
-            print("Trying routing with PnR placer exp:", os.environ["PNR_PLACER_EXP"])
+            print("Trying placement with PnR placer exp:", os.environ["PNR_PLACER_EXP"])
             place(packed_file, layout_filename, placement_filename, has_fixed)
         # making sure the placement result is there
         if not os.path.isfile(placement_filename):
@@ -103,9 +108,16 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
                     shift_registers=shift_registers)
                 routed = True
             except:
+                if pnr_placer_exp_set:
+                    print("Unable to route")
+                    raise PnRException()
                 pnr_placer_exp += 1
         else:
             routed = True
+
+    if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
+        del os.environ["PNR_PLACER_EXP"]
+    
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
