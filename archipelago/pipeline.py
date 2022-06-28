@@ -276,10 +276,10 @@ def pipeline_pnr(
     else:
         pe_cycles = 0
 
-    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "1":
-        io_cycles = 1
-    else:
+    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
         io_cycles = 0
+    else:
+        io_cycles = 1
 
     graph = construct_graph(
         placement,
