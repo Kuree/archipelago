@@ -63,9 +63,10 @@ def sta(graph):
         if len(graph.sources[node]) == 0 and (
             node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1
         ):
-            comp = PathComponents()
-            comp.glbs = 1
-            components = [comp]
+            if not node.input_port_break_path["output"]:
+                comp = PathComponents()
+                comp.glbs = 1
+                components = [comp]
 
         for parent in graph.sources[node]:
             comp = PathComponents()
@@ -232,8 +233,13 @@ def main():
     else:
         pe_latency = 0
 
+    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
+        io_cycles = 0
+    else:
+        io_cycles = 1
+
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0
+        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
