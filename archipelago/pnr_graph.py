@@ -54,6 +54,7 @@ class RouteNode:
         self.rmux_name = rmux_name
         self.reg = reg
         self.kernel = kernel
+        self.break_crit_path = False
 
     def update_tile_id(self):
         self.tile_id = (

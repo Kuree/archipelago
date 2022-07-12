@@ -106,6 +106,9 @@ def sta(graph):
                             comp.dhops += 1
                         else:
                             comp.hhops += 1
+
+                    if node.break_crit_path:
+                        comp = PathComponents()
                 elif node.route_type == RouteType.RMUX:
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1

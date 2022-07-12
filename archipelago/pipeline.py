@@ -19,6 +19,90 @@ from archipelago.pnr_graph import (
 )
 from archipelago.sta import sta, load_graph
 
+def retime_registers(graph):
+    itr = 0
+
+    print("Starting frequency")
+    curr_freq, crit_path, crit_nets = sta(graph)
+
+    reg_at_begin = False
+    reg_at_end = False
+
+    if graph.sources[graph.sources[crit_path[0][0]][0]][0].route_type == RouteType.REG:
+        reg_at_begin = True
+        begin_reg = graph.sources[graph.sources[graph.sources[crit_path[0][0]][0]][0]][0]
+
+    if graph.sinks[graph.sinks[crit_path[0][0]][0]][0].route_type == RouteType.REG:
+        reg_at_end = True
+        end_reg = graph.sinks[graph.sinks[crit_path[0][0]][0]][0]
+
+    if not (reg_at_begin or reg_at_end):
+        print("Critical path doesn't start or end at reg, retiming won't help")
+        return
+
+    while True:
+        print("Iteration:", itr)
+        itr += 1
+        
+        possible_reg_locs = []
+
+        node_idx = 0
+        while True:
+            if (
+                isinstance(crit_path[node_idx + 1][0], RouteNode)
+                and crit_path[node_idx + 1][0].route_type == RouteType.RMUX
+                and crit_path[node_idx][0].route_type == RouteType.SB
+            ):
+                possible_reg_locs.append(crit_path[node_idx][0])
+                break
+            node_idx += 1
+
+            if node_idx + 1 >= len(crit_path):
+                break
+        
+        max_freq = curr_freq
+        max_reg_loc = None
+        moved_reg = None
+
+        if reg_at_begin:
+            begin_reg.input_port_break_path["reg"] = False
+
+            for reg_loc in possible_reg_locs:
+                reg_loc.break_crit_path = True
+                new_freq,_,_ = sta(graph)
+                if new_freq > max_freq:
+                    max_freq = new_freq
+                    max_reg_loc = reg_loc
+                    moved_reg = begin_reg
+
+                reg_loc.break_crit_path = False
+
+            begin_reg.input_port_break_path["reg"] = True
+
+        if reg_at_end:
+            end_reg.input_port_break_path["reg"] = False
+
+            for reg_loc in possible_reg_locs:
+                reg_loc.break_crit_path = True
+                new_freq,_,_ = sta(graph)
+                if new_freq > max_freq:
+                    max_freq = new_freq
+                    max_reg_loc = reg_loc
+                    moved_reg = begin_reg
+
+                reg_loc.break_crit_path = False
+
+            end_reg.input_port_break_path["reg"] = True
+            
+            
+        if max_reg_loc is None:
+            print("No improvement, stopping")
+            break
+
+        curr_freq = max_freq
+        max_reg_loc.break_crit_path = True
+        moved_reg.input_port_break_path["reg"] = True
+
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     nodes = graph.topological_sort()
@@ -302,6 +386,10 @@ def pipeline_pnr(
         harden_flush,
         pipeline_config_interval,
     )
+
+    print("\nStarting register retiming")
+
+    retime_registers(graph)
 
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")
