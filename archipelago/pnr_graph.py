@@ -749,7 +749,7 @@ def construct_graph(
 
     # Need special case for input IO tiles since they don't have an "input" port
     for tile in graph.get_input_ios():
-        tile.input_port_latencies["output"] = io_latency
+        tile.input_port_latencies["output"] = 0
         tile.input_port_break_path["output"] = io_latency != 0
 
     graph.update_sources_and_sinks()

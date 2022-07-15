@@ -115,6 +115,12 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
                     ]
                 curr_node = parent_node
                 parent_node = graph.sources[parent_node][0]
+
+
+    max_flush_cycle = max(flush_cycles.values())
+    for mem,flush_c in flush_cycles.items():
+        flush_cycles[mem] = -(flush_c - max_flush_cycle)
+
     return flush_cycles
 
 
