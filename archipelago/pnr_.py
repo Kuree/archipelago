@@ -8,6 +8,9 @@ from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
 import pycyclone
 from archipelago.pipeline import pipeline_pnr
+from .sta import sta
+from .pnr_graph import construct_graph
+
 
 class PnRException(Exception):
     def __init__(self):
@@ -70,15 +73,16 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     # get placement name
     placement_filename = os.path.join(cwd, app_name + ".place")
 
-
     pnr_placer_exp = 1
     pnr_placer_exp_set = False
+    max_freq = 0
+    opt_pnr_placer_exp = 1
     if "PNR_PLACER_EXP" in os.environ and os.environ["PNR_PLACER_EXP"].isnumeric():
         pnr_placer_exp = int(os.environ["PNR_PLACER_EXP"])
         pnr_placer_exp_set = True
-        
+
     routed = False
-    while not routed and (pnr_placer_exp < 10 or pnr_placer_exp_set):
+    while not routed and (pnr_placer_exp < 30 or pnr_placer_exp_set):
         # if we have fixed
         if fixed_pos is not None:
             assert isinstance(fixed_pos, dict)
@@ -104,9 +108,37 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
         if not load_only:
             try:
                 route(packed_file, placement_filename, graph_path, route_filename,
-                    max_frequency, layout_filename, wave_info=wave_filename,
-                    shift_registers=shift_registers)
-                routed = True
+                      max_frequency, layout_filename, wave_info=wave_filename,
+                      shift_registers=shift_registers)
+                # sweep the PNR_PLACER_EXP if the flag is on
+                routed = "SWEEP_PNR_PLACER_EXP" not in os.environ
+                if not routed:
+                    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
+                        pe_cycles = 1
+                    else:
+                        pe_cycles = 0
+                    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
+                        io_cycles = 0
+                    else:
+                        io_cycles = 1
+                    placement_result = pycyclone.io.load_placement(placement_filename)
+                    routing_result = load_routing_result(route_filename)
+                    graph = construct_graph(
+                        placement_result,
+                        routing_result,
+                        id_to_name,
+                        input_netlist[0],
+                        pe_latency=pe_cycles,
+                        pond_latency=0,
+                        io_latency=io_cycles,
+                    )
+                    curr_freq, crit_path, crit_nets = sta(graph)
+                    if curr_freq > max_freq:
+                        max_freq = curr_freq
+                        opt_pnr_placer_exp = pnr_placer_exp
+                    print("\nCurrent maximum frequency:", max_freq, "MHz")
+                    print("Current optimal PNR_PLACER_EXP:", opt_pnr_placer_exp, "\n")
+                    pnr_placer_exp += 1
             except:
                 if pnr_placer_exp_set:
                     print("Unable to route")
@@ -115,9 +147,41 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
         else:
             routed = True
 
+    # print and record the final frequency
+    if "SWEEP_PNR_PLACER_EXP" in os.environ:
+        if not load_only:
+            print("\nFinal maximum frequency:", max_freq, "MHz")
+            print("Final optimal PNR_PLACER_EXP:", opt_pnr_placer_exp, "\n")
+            pnr_exp_file = os.path.join(cwd, "pnr_exp.txt")
+            f_pnr = open(pnr_exp_file, "w")
+            f_pnr.write(str(opt_pnr_placer_exp))
+
+        # need to reload the optimal frequency result if sweeping is on
+        if fixed_pos is not None:
+            assert isinstance(fixed_pos, dict)
+            dump_placement_result(fixed_pos, placement_filename, id_to_name)
+            has_fixed = True
+        else:
+            has_fixed = False
+        if not load_only:
+            os.environ["PNR_PLACER_EXP"] = str(opt_pnr_placer_exp)
+            print("Trying placement with the optimal PnR placer exp:", os.environ["PNR_PLACER_EXP"])
+            place(packed_file, layout_filename, placement_filename, has_fixed)
+        if not os.path.isfile(placement_filename):
+            raise PnRException()
+        route_filename = os.path.join(cwd, app_name + ".route")
+        if max_frequency is not None:
+            wave_filename = os.path.join(cwd, app_name + ".wave")
+        else:
+            wave_filename = None
+        if not load_only:
+            route(packed_file, placement_filename, graph_path, route_filename,
+                max_frequency, layout_filename, wave_info=wave_filename,
+                shift_registers=shift_registers)
+
     if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
         del os.environ["PNR_PLACER_EXP"]
-    
+
     # making sure the routing result is there
     if not os.path.isfile(route_filename):
         raise PnRException()
