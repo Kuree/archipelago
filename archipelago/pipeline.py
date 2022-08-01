@@ -92,6 +92,9 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
                 flush_cycles[mem] = 0
             else:
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
+    
+            # Pipeling register at top of array
+            flush_cycles[mem] += 1
     else:
         for io in graph.get_input_ios():
             if io.kernel == "io1in_reset":
@@ -117,11 +120,11 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
                 parent_node = graph.sources[parent_node][0]
 
 
-    max_flush_cycle = 1
+    max_flush_cycles = max(flush_cycles.values())
     for mem,flush_c in flush_cycles.items():
-        flush_cycles[mem] = -(flush_c - max_flush_cycle)
+        flush_cycles[mem] = max_flush_cycles - flush_c
 
-    return flush_cycles
+    return flush_cycles, max_flush_cycles
 
 
 def find_closest_match(kernel_target, candidates):
@@ -205,7 +208,12 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    flush_latencies = flush_cycles(graph, harden_flush, pipeline_config_interval)
+    flush_latencies, max_flush_cycles = flush_cycles(graph, harden_flush, pipeline_config_interval)
+    
+    for node in kernel_graph.nodes:
+        if "io16in" in node.kernel or "io1in" in node.kernel:
+            node.latency -= max_flush_cycles
+            assert node.latency >= 0, f"{node.kernel} has negative compute kernel latency"
 
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace(
