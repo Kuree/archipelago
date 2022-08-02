@@ -1,4 +1,5 @@
 import os
+import copy
 import json
 import argparse
 import sys
@@ -21,18 +22,16 @@ class PathComponents:
     def __init__(
         self,
         glbs=0,
-        hhops=0,
-        uhops=0,
-        dhops=0,
+        sb_delay=0,
+        sb_clk_delay=0,
         pes=0,
         mems=0,
         available_regs=0,
         parent=None,
     ):
         self.glbs = glbs
-        self.hhops = hhops
-        self.uhops = uhops
-        self.dhops = dhops
+        self.sb_delay = sb_delay
+        self.sb_clk_delay = sb_clk_delay
         self.pes = pes
         self.mems = mems
         self.available_regs = available_regs
@@ -44,15 +43,108 @@ class PathComponents:
     def get_total(self):
         total = 0
         total += self.glbs * self.delays["glb"]
-        total += self.hhops * self.delays["sb_horiz"]
-        total += self.uhops * self.delays["sb_up"]
-        total += self.dhops * self.delays["sb_down"]
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
+        total += self.sb_delay
+        total += self.sb_clk_delay
         return total
 
+    def print(self):
+        print("\tGlbs:", self.glbs)
+        print("\tPEs:", self.pes)
+        print("\tMems:", self.mems)
+        print("\tSB delay:", self.sb_delay, "ps")
+        print("\tSB clk delay:", self.sb_clk_delay, "ps")
+
+def get_mem_tile_columns(graph):
+    mem_column = 4
+    for mem in graph.get_mems():
+        if (mem.x + 1) % mem_column != 0:
+            raise ValueError("MEM tile not at expected column, please update me")
+
+    return mem_column
+
+def calc_sb_delay(graph, node, comp, mem_column):
+    # Need to associate each sb hop with these catagories:
+    # mem2pe_clk
+    # pe2mem_clk
+    # north_input_clk
+    # south_input_clk
+    # pe2pe_west_east_input_clk
+    # mem_endpoint_sb
+    # pe_endpoint_sb
+
+    if node.bit_width == 1:
+        return
+
+    if node.io == 0:
+        # Its the input to the SB
+        if node.side == 0:
+            # Coming in from right
+            source_x = node.x + 1
+        elif node.side == 1:
+            # Coming in from bottom
+            source_x = node.x
+        elif node.side == 2:
+            # Coming in from left
+            source_x = node.x - 1
+        else:
+            # Coming in from top
+            source_x = node.x
+
+        next_sb = graph.sinks[node][0]
+        if next_sb.route_type != RouteType.SB:
+            return
+        assert next_sb.io == 1
+
+        # Its the output from the SB
+        if next_sb.side == 0:
+            # Going to right
+            dest_x = next_sb.x + 1
+        elif next_sb.side == 1:
+            # Going to bottom
+            dest_x = next_sb.x
+        elif next_sb.side == 2:
+            # Going to left
+            dest_x = next_sb.x - 1
+        else:
+            # Going to top
+            dest_x = next_sb.x
+
+        source_mem = False
+        if (source_x + 1) % mem_column == 0:
+            # Starting at mem column
+            source_mem = True
+
+        dest_mem = False
+        if (dest_x + 1) % mem_column == 0:
+            # Starting at mem column
+            dest_mem = True
+
+        if source_mem and not dest_mem:
+            # mem2pe_clk
+            comp.sb_clk_delay -= comp.delays["mem2pe_clk"]
+        elif not source_mem and dest_mem:
+            # pe2mem_clk
+            comp.sb_clk_delay -= comp.delays["pe2mem_clk"]
+        elif node.side == 3:
+            # north_input_clk
+            comp.sb_clk_delay -= comp.delays["north_input_clk"]
+        elif node.side == 1:
+            # south_input_clk
+            comp.sb_clk_delay -= comp.delays["south_input_clk"]
+        else:
+            # pe2pe_west_east_input_clk
+            comp.sb_clk_delay -= comp.delays["pe2pe_west_east_input_clk"]
+
+        if dest_mem:
+            comp.sb_delay += comp.delays["mem_endpoint_sb"]
+        else:
+            comp.sb_delay += comp.delays["pe_endpoint_sb"]
 
 def sta(graph):
+
+    mem_tile_column = get_mem_tile_columns(graph)
     nodes = graph.topological_sort()
     timing_info = {}
 
@@ -72,13 +164,7 @@ def sta(graph):
             comp = PathComponents()
 
             if parent in timing_info:
-                comp.glbs = timing_info[parent].glbs
-                comp.hhops = timing_info[parent].hhops
-                comp.uhops = timing_info[parent].uhops
-                comp.dhops = timing_info[parent].dhops
-                comp.pes = timing_info[parent].pes
-                comp.mems = timing_info[parent].mems
-                comp.available_regs = timing_info[parent].available_regs
+                comp = copy.deepcopy(timing_info[parent])
                 comp.parent = parent
 
             if isinstance(node, TileNode):
@@ -86,26 +172,20 @@ def sta(graph):
                     comp.pes += 1
                 elif node.tile_type == TileType.MEM:
                     comp.mems += 1
+                    if parent.route_type == RouteType.PORT:
+                        if node.input_port_break_path[parent.port]:
+                            comp = PathComponents()
                 elif node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1:
                     comp.glbs += 1
-
-                if parent.route_type == RouteType.PORT:
-                    if node.input_port_break_path[parent.port]:
-                        comp = PathComponents()
-                elif parent.route_type == RouteType.REG:
-                    if node.input_port_break_path["reg"]:
-                        comp = PathComponents()
-                else:
-                    raise ValueError("Parent of tile should be a port")
             else:
-                if node.route_type == RouteType.SB:
-                    if node.io == 1:
-                        if node.side == 3:
-                            comp.uhops += 1
-                        elif node.side == 1:
-                            comp.dhops += 1
-                        else:
-                            comp.hhops += 1
+                if node.route_type == RouteType.PORT and isinstance(graph.sinks[node][0], TileNode):
+                    if graph.sinks[node][0].input_port_break_path[node.port]:
+                        comp = PathComponents()
+                elif node.route_type == RouteType.REG and isinstance(graph.sinks[node][0], TileNode):
+                    if graph.sinks[node][0].input_port_break_path["reg"]:
+                        comp = PathComponents()
+                elif node.route_type == RouteType.SB:
+                    calc_sb_delay(graph, node, comp, mem_tile_column)
                 elif node.route_type == RouteType.RMUX:
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
@@ -132,28 +212,17 @@ def sta(graph):
     max_node = list(node_to_timing.keys())[0]
     max_delay = list(node_to_timing.values())[0]
 
-    clock_speed = 1.0e12 / max_delay / 1e6
+    clock_speed = int(1.0e12 / max_delay / 1e6)
+    # print("\nCritical Path Info:")
 
-    print("\nCritical Path Info:")
-    print("\tMaximum clock frequency:", clock_speed, "MHz")
-    print("\tCritical Path:", max_delay, "ps")
-    print(
-        f"\t{max_node}",
-        "glb:",
-        timing_info[max_node].glbs,
-        "horiz hops:",
-        timing_info[max_node].hhops,
-        "up hops:",
-        timing_info[max_node].uhops,
-        "down hops:",
-        timing_info[max_node].dhops,
-        "pes:",
-        timing_info[max_node].pes,
-        "mems:",
-        timing_info[max_node].mems,
-        "\n",
-    )
+    # for max_node in list(node_to_timing.keys()):
+    # print("\tMaximum clock frequency:", clock_speed, "MHz")
+    # print("\tCritical Path:", max_delay, "ps")
+    print(max_delay)
+    # print(f"\t{max_node}")
+    # timing_info[max_node].print()
 
+    max_node = list(node_to_timing.keys())[0]
     curr_node = max_node
     crit_path = []
     crit_path.append((curr_node, timing_info[curr_node].get_total()))

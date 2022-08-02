@@ -1,9 +1,14 @@
 {
-"pe": 700,
-"mem": 800,
-"sb_up": 90,
-"sb_down": 190,
-"sb_horiz": 140,
-"rmux": 0,
-"glb": 1100
-}
+    "pe": 700,
+    "mem": 800,
+    "glb": 1100,
+    "rmux": 0,
+    "mem2pe_clk": -130,
+    "pe2mem_clk": 130,
+    "north_input_clk": -44,
+    "south_input_clk": 44,
+    "pe2pe_west_east_input_clk": 0,
+    "mem_endpoint_sb": 250,
+    "pe_endpoint_sb": 160
+    }
+    
