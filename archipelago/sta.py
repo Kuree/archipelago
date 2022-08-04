@@ -46,7 +46,7 @@ class PathComponents:
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
         total += self.sb_delay
-        total += self.sb_clk_delay
+        total -= self.sb_clk_delay
         return total
 
     def print(self):
@@ -217,12 +217,12 @@ def sta(graph):
     clock_speed = int(1.0e12 / max_delay / 1e6)
     # print("\nCritical Path Info:")
 
-    # for max_node in list(node_to_timing.keys()):
+    # print(max_delay)
+    for max_node in list(node_to_timing.keys()):
     # print("\tMaximum clock frequency:", clock_speed, "MHz")
-    # print("\tCritical Path:", max_delay, "ps")
-    print(max_delay)
-    # print(f"\t{max_node}")
-    # timing_info[max_node].print()
+        print(f"\t{max_node}")
+        print("\tCritical Path:", max_delay, "ps")
+        timing_info[max_node].print()
 
     max_node = list(node_to_timing.keys())[0]
     curr_node = max_node
