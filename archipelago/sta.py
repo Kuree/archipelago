@@ -137,10 +137,12 @@ def calc_sb_delay(graph, node, comp, mem_column):
             # pe2pe_west_east_input_clk
             comp.sb_clk_delay -= comp.delays["pe2pe_west_east_input_clk"]
 
-        if dest_mem:
-            comp.sb_delay += comp.delays["mem_endpoint_sb"]
+        side_to_dir = {0:"E", 1:"S", 2:"W", 3:"N"}
+
+        if (node.x + 1) % mem_column == 0:
+            comp.sb_delay += comp.delays[f"mem{side_to_dir[node.side]}2{side_to_dir[next_sb.side]}"]
         else:
-            comp.sb_delay += comp.delays["pe_endpoint_sb"]
+            comp.sb_delay += comp.delays[f"pe{side_to_dir[node.side]}2{side_to_dir[next_sb.side]}"]
 
 def sta(graph):
 
