@@ -23,7 +23,7 @@ class PathComponents:
         self,
         glbs=0,
         sb_delay=0,
-        sb_clk_delay=0,
+        sb_clk_delay=[],
         pes=0,
         mems=0,
         available_regs=0,
@@ -46,7 +46,7 @@ class PathComponents:
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
         total += self.sb_delay
-        total -= self.sb_clk_delay
+        total -= sum(self.sb_clk_delay)
         return total
 
     def print(self):
@@ -54,7 +54,7 @@ class PathComponents:
         print("\tPEs:", self.pes)
         print("\tMems:", self.mems)
         print("\tSB delay:", self.sb_delay, "ps")
-        print("\tSB clk delay:", self.sb_clk_delay, "ps")
+        print("\tSB clk delay:", self.sb_clk_delay, sum(self.sb_clk_delay), "ps")
 
 def get_mem_tile_columns(graph):
     mem_column = 4
@@ -97,19 +97,19 @@ def calc_sb_delay(graph, node, comp, mem_column):
             return
         assert next_sb.io == 1
 
-        # Its the output from the SB
-        if next_sb.side == 0:
-            # Going to right
-            dest_x = next_sb.x + 1
-        elif next_sb.side == 1:
-            # Going to bottom
-            dest_x = next_sb.x
-        elif next_sb.side == 2:
-            # Going to left
-            dest_x = next_sb.x - 1
-        else:
-            # Going to top
-            dest_x = next_sb.x
+        # # Its the output from the SB
+        # if next_sb.side == 0:
+        #     # Going to right
+        #     dest_x = next_sb.x + 1
+        # elif next_sb.side == 1:
+        #     # Going to bottom
+        #     dest_x = next_sb.x
+        # elif next_sb.side == 2:
+        #     # Going to left
+        #     dest_x = next_sb.x - 1
+        # else:
+        #     # Going to top
+        #     dest_x = next_sb.x
 
         source_mem = False
         if (source_x + 1) % mem_column == 0:
@@ -117,25 +117,25 @@ def calc_sb_delay(graph, node, comp, mem_column):
             source_mem = True
 
         dest_mem = False
-        if (dest_x + 1) % mem_column == 0:
+        if (next_sb.x + 1) % mem_column == 0:
             # Starting at mem column
             dest_mem = True
 
         if source_mem and not dest_mem:
             # mem2pe_clk
-            comp.sb_clk_delay -= comp.delays["mem2pe_clk"]
+            comp.sb_clk_delay.append(comp.delays["mem2pe_clk"])
         elif not source_mem and dest_mem:
             # pe2mem_clk
-            comp.sb_clk_delay -= comp.delays["pe2mem_clk"]
+            comp.sb_clk_delay.append(comp.delays["pe2mem_clk"])
         elif node.side == 3:
             # north_input_clk
-            comp.sb_clk_delay -= comp.delays["north_input_clk"]
+            comp.sb_clk_delay.append(comp.delays["north_input_clk"])
         elif node.side == 1:
             # south_input_clk
-            comp.sb_clk_delay -= comp.delays["south_input_clk"]
+            comp.sb_clk_delay.append(comp.delays["south_input_clk"])
         else:
             # pe2pe_west_east_input_clk
-            comp.sb_clk_delay -= comp.delays["pe2pe_west_east_input_clk"]
+            comp.sb_clk_delay.append(comp.delays["pe2pe_west_east_input_clk"])
 
         side_to_dir = {0:"E", 1:"S", 2:"W", 3:"N"}
 
@@ -217,12 +217,12 @@ def sta(graph):
     clock_speed = int(1.0e12 / max_delay / 1e6)
     # print("\nCritical Path Info:")
 
-    # print(max_delay)
-    for max_node in list(node_to_timing.keys()):
+    print(max_delay)
+    # for max_node in list(node_to_timing.keys()):
     # print("\tMaximum clock frequency:", clock_speed, "MHz")
-        print(f"\t{max_node}")
-        print("\tCritical Path:", max_delay, "ps")
-        timing_info[max_node].print()
+        # print(f"\t{max_node}")
+        # print("\tCritical Path:", max_delay, "ps")
+    timing_info[max_node].print()
 
     max_node = list(node_to_timing.keys())[0]
     curr_node = max_node
