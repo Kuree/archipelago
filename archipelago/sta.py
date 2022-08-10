@@ -22,7 +22,7 @@ class PathComponents:
     def __init__(
         self,
         glbs=0,
-        sb_delay=0,
+        sb_delay=[],
         sb_clk_delay=[],
         pes=0,
         mems=0,
@@ -45,7 +45,7 @@ class PathComponents:
         total += self.glbs * self.delays["glb"]
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
-        total += self.sb_delay
+        total += sum(self.sb_delay)
         total -= sum(self.sb_clk_delay)
         return total
 
@@ -53,7 +53,7 @@ class PathComponents:
         print("\tGlbs:", self.glbs)
         print("\tPEs:", self.pes)
         print("\tMems:", self.mems)
-        print("\tSB delay:", self.sb_delay, "ps")
+        print("\tSB delay:", self.sb_delay, sum(self.sb_delay), "ps")
         print("\tSB clk delay:", self.sb_clk_delay, sum(self.sb_clk_delay), "ps")
 
 def get_mem_tile_columns(graph):
@@ -64,7 +64,7 @@ def get_mem_tile_columns(graph):
 
     return mem_column
 
-def calc_sb_delay(graph, node, comp, mem_column):
+def calc_sb_delay(graph, node, parent, comp, mem_column):
     # Need to associate each sb hop with these catagories:
     # mem2pe_clk
     # pe2mem_clk
@@ -74,43 +74,28 @@ def calc_sb_delay(graph, node, comp, mem_column):
     # mem_endpoint_sb
     # pe_endpoint_sb
 
-    if node.bit_width == 1:
+    if parent.bit_width == 1:
         return
 
-    if node.io == 0:
+    if parent.io == 0:
         # Its the input to the SB
-        if node.side == 0:
+        if parent.side == 0:
             # Coming in from right
-            source_x = node.x + 1
-        elif node.side == 1:
+            source_x = parent.x + 1
+        elif parent.side == 1:
             # Coming in from bottom
-            source_x = node.x
-        elif node.side == 2:
+            source_x = parent.x
+        elif parent.side == 2:
             # Coming in from left
-            source_x = node.x - 1
+            source_x = parent.x - 1
         else:
             # Coming in from top
-            source_x = node.x
+            source_x = parent.x
 
-        next_sb = graph.sinks[node][0]
+        next_sb = node
         if next_sb.route_type != RouteType.SB:
             return
         assert next_sb.io == 1
-
-        # # Its the output from the SB
-        # if next_sb.side == 0:
-        #     # Going to right
-        #     dest_x = next_sb.x + 1
-        # elif next_sb.side == 1:
-        #     # Going to bottom
-        #     dest_x = next_sb.x
-        # elif next_sb.side == 2:
-        #     # Going to left
-        #     dest_x = next_sb.x - 1
-        # else:
-        #     # Going to top
-        #     dest_x = next_sb.x
-
         source_mem = False
         if (source_x + 1) % mem_column == 0:
             # Starting at mem column
@@ -127,10 +112,10 @@ def calc_sb_delay(graph, node, comp, mem_column):
         elif not source_mem and dest_mem:
             # pe2mem_clk
             comp.sb_clk_delay.append(comp.delays["pe2mem_clk"])
-        elif node.side == 3:
+        elif parent.side == 3:
             # north_input_clk
             comp.sb_clk_delay.append(comp.delays["north_input_clk"])
-        elif node.side == 1:
+        elif parent.side == 1:
             # south_input_clk
             comp.sb_clk_delay.append(comp.delays["south_input_clk"])
         else:
@@ -139,10 +124,10 @@ def calc_sb_delay(graph, node, comp, mem_column):
 
         side_to_dir = {0:"E", 1:"S", 2:"W", 3:"N"}
 
-        if (node.x + 1) % mem_column == 0:
-            comp.sb_delay += comp.delays[f"mem{side_to_dir[node.side]}2{side_to_dir[next_sb.side]}"]
+        if (parent.x + 1) % mem_column == 0:
+            comp.sb_delay.append(comp.delays[f"mem{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"])
         else:
-            comp.sb_delay += comp.delays[f"pe{side_to_dir[node.side]}2{side_to_dir[next_sb.side]}"]
+            comp.sb_delay.append(comp.delays[f"pe{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"])
 
 def sta(graph):
 
@@ -187,7 +172,7 @@ def sta(graph):
                     if graph.sinks[node][0].input_port_break_path["reg"]:
                         comp = PathComponents()
                 elif node.route_type == RouteType.SB:
-                    calc_sb_delay(graph, node, comp, mem_tile_column)
+                    calc_sb_delay(graph, node, parent, comp, mem_tile_column)
                 elif node.route_type == RouteType.RMUX:
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
