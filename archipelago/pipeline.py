@@ -237,9 +237,9 @@ def update_kernel_latencies(
 
     pond_latencies = {}
     for pond_node in graph.get_ponds():
-        pond_latencies[id_to_name[pond_node.tile_id]] = pond_node.input_port_latencies[
-            "data_in_pond"
-        ]
+        for port,lat in pond_node.input_port_latencies.items():
+            if port != "flush":
+                pond_latencies[id_to_name[pond_node.tile_id]] = lat
 
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(matched_kernel_latencies, indent=4))
