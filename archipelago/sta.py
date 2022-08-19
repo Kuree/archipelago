@@ -165,6 +165,8 @@ def sta(graph):
                 elif node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1:
                     comp.glbs += 1
             else:
+                if len(graph.sinks[node]) == 0:
+                    continue
                 if node.route_type == RouteType.PORT and isinstance(graph.sinks[node][0], TileNode):
                     if graph.sinks[node][0].input_port_break_path[node.port]:
                         comp = PathComponents()
