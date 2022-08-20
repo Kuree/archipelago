@@ -94,7 +94,7 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
     
             # Pipeling register at top of array
-            # flush_cycles[mem] += 1
+            flush_cycles[mem] += 1
     else:
         for io in graph.get_input_ios():
             if io.kernel == "io1in_reset":
