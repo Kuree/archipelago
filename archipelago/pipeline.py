@@ -84,7 +84,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     return kernel_latencies
 
 
-def flush_cycles(graph, harden_flush, pipeline_config_interval):
+def flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds):
     if harden_flush:
         flush_cycles = {}
         for mem in graph.get_mems() + graph.get_ponds():
@@ -95,6 +95,17 @@ def flush_cycles(graph, harden_flush, pipeline_config_interval):
     
             # Pipeling register at top of array
             flush_cycles[mem] += 1
+
+        for pe in graph.get_pes():
+            if pe.tile_id in pes_with_packed_ponds:
+                pond = pes_with_packed_ponds[pe.tile_id]
+                if pe.y == 0:
+                    flush_cycles[pond] = 0
+                else:
+                    flush_cycles[pond] = (pe.y - 1) // pipeline_config_interval
+        
+                # Pipeling register at top of array
+                flush_cycles[pond] += 1
     else:
         for io in graph.get_input_ios():
             if io.kernel == "io1in_reset":
@@ -201,6 +212,7 @@ def update_kernel_latencies(
     routing,
     harden_flush,
     pipeline_config_interval,
+    pes_with_packed_ponds
 ):
     kernel_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
@@ -208,8 +220,12 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
+<<<<<<< Updated upstream
     flush_latencies, max_flush_cycles = flush_cycles(graph, harden_flush, pipeline_config_interval)
     
+=======
+    flush_latencies, max_flush_cycles = flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds)
+>>>>>>> Stashed changes
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
             node.latency -= max_flush_cycles
@@ -278,6 +294,7 @@ def pipeline_pnr(
     load_only,
     harden_flush,
     pipeline_config_interval,
+    pes_with_packed_ponds
 ):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
@@ -315,6 +332,7 @@ def pipeline_pnr(
         routing,
         harden_flush,
         pipeline_config_interval,
+        pes_with_packed_ponds
     )
 
     freq_file = os.path.join(app_dir, "design.freq")

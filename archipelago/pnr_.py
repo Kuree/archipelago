@@ -20,7 +20,7 @@ class PnRException(Exception):
 def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
         app_name="", id_to_name=None, fixed_pos=None, max_num_col=None,
         compact=False, copy_to_dir=None, max_frequency=None,
-        shift_registers=False, harden_flush=False, pipeline_config_interval=0):
+        shift_registers=False, harden_flush=False, pipeline_config_interval=0, pes_with_packed_ponds=None):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
 
@@ -191,7 +191,7 @@ def pnr(arch, input_netlist=None, load_only=False, packed_file="", cwd="",
     routing_result = load_routing_result(route_filename)
 
     if id_to_name is not None:
-        placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, input_netlist[0], load_only, harden_flush, pipeline_config_interval)
+        placement, routing, id_to_name = pipeline_pnr(cwd, placement_result, routing_result, id_to_name, input_netlist[0], load_only, harden_flush, pipeline_config_interval, pes_with_packed_ponds)
 
     # tear down
     if use_temp:
