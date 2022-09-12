@@ -220,12 +220,7 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-<<<<<<< Updated upstream
-    flush_latencies, max_flush_cycles = flush_cycles(graph, harden_flush, pipeline_config_interval)
-    
-=======
     flush_latencies, max_flush_cycles = flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds)
->>>>>>> Stashed changes
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
             node.latency -= max_flush_cycles
