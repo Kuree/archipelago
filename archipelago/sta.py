@@ -50,11 +50,12 @@ class PathComponents:
         return total
 
     def print(self):
-        print("\tGlbs:", self.glbs)
-        print("\tPEs:", self.pes)
-        print("\tMems:", self.mems)
-        print("\tSB delay:", self.sb_delay, sum(self.sb_delay), "ps")
-        print("\tSB clk delay:", self.sb_clk_delay, sum(self.sb_clk_delay), "ps")
+        print("\t\tGlbs:", self.glbs)
+        print("\t\tPEs:", self.pes)
+        print("\t\tMems:", self.mems)
+        print("\t\tSB delay:", sum(self.sb_delay), "ps")
+        print("\t\tSB clk delay:", sum(self.sb_clk_delay), "ps")
+
 
 def get_mem_tile_columns(graph):
     mem_column = 4
@@ -63,6 +64,7 @@ def get_mem_tile_columns(graph):
             raise ValueError("MEM tile not at expected column, please update me")
 
     return mem_column
+
 
 def calc_sb_delay(graph, node, parent, comp, mem_column):
     # Need to associate each sb hop with these catagories:
@@ -122,12 +124,19 @@ def calc_sb_delay(graph, node, parent, comp, mem_column):
             # pe2pe_west_east_input_clk
             comp.sb_clk_delay.append(comp.delays["pe2pe_west_east_input_clk"])
 
-        side_to_dir = {0:"E", 1:"S", 2:"W", 3:"N"}
+        side_to_dir = {0: "E", 1: "S", 2: "W", 3: "N"}
 
         if (parent.x + 1) % mem_column == 0:
-            comp.sb_delay.append(comp.delays[f"mem{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"])
+            comp.sb_delay.append(
+                comp.delays[
+                    f"mem{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"
+                ]
+            )
         else:
-            comp.sb_delay.append(comp.delays[f"pe{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"])
+            comp.sb_delay.append(
+                comp.delays[f"pe{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"]
+            )
+
 
 def sta(graph):
 
@@ -167,10 +176,14 @@ def sta(graph):
             else:
                 if len(graph.sinks[node]) == 0:
                     continue
-                if node.route_type == RouteType.PORT and isinstance(graph.sinks[node][0], TileNode):
+                if node.route_type == RouteType.PORT and isinstance(
+                    graph.sinks[node][0], TileNode
+                ):
                     if graph.sinks[node][0].input_port_break_path[node.port]:
                         comp = PathComponents()
-                elif node.route_type == RouteType.REG and isinstance(graph.sinks[node][0], TileNode):
+                elif node.route_type == RouteType.REG and isinstance(
+                    graph.sinks[node][0], TileNode
+                ):
                     if graph.sinks[node][0].input_port_break_path["reg"]:
                         comp = PathComponents()
                 elif node.route_type == RouteType.SB:
@@ -202,13 +215,10 @@ def sta(graph):
     max_delay = list(node_to_timing.values())[0]
 
     clock_speed = int(1.0e12 / max_delay / 1e6)
-    # print("\nCritical Path Info:")
 
-    print(max_delay)
-    # for max_node in list(node_to_timing.keys()):
-    # print("\tMaximum clock frequency:", clock_speed, "MHz")
-        # print(f"\t{max_node}")
-        # print("\tCritical Path:", max_delay, "ps")
+    print("\tMaximum clock frequency:", clock_speed, "MHz")
+    print("\tCritical Path:", max_delay, "ps")
+    print("\tCritical Path Info:")
     timing_info[max_node].print()
 
     max_node = list(node_to_timing.keys())[0]
@@ -267,6 +277,31 @@ def parse_args():
     return netlist, placement, route, id_to_name_filename, args.visualize
 
 
+def run_sta(packed_file, placement_file, routing_file, id_to_name):
+
+    netlist, buses = pythunder.io.load_netlist(packed_file)
+    placement = load_placement(placement_file)
+    routing = load_routing_result(routing_file)
+
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
+        pe_latency = 1
+    else:
+        pe_latency = 0
+
+    if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
+        io_cycles = 0
+    else:
+        io_cycles = 1
+
+    routing_result_graph = construct_graph(
+        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles
+    )
+
+    clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
+
+    return clock_speed
+
+
 def main():
     (
         packed_file,
@@ -311,6 +346,8 @@ def main():
         routing_graphs = load_graph([graph1, graph16])
 
         visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
+
+    return clock_speed
 
 
 if __name__ == "__main__":

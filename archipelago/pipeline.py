@@ -84,7 +84,9 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     return kernel_latencies
 
 
-def flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds):
+def flush_cycles(
+    graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
+):
     if harden_flush:
         flush_cycles = {}
         for mem in graph.get_mems() + graph.get_ponds():
@@ -92,7 +94,7 @@ def flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_
                 flush_cycles[mem] = 0
             else:
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
-    
+
             # Pipeling register at top of array
             flush_cycles[mem] += 1
 
@@ -103,7 +105,7 @@ def flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_
                     flush_cycles[pond] = 0
                 else:
                     flush_cycles[pond] = (pe.y - 1) // pipeline_config_interval
-        
+
                 # Pipeling register at top of array
                 flush_cycles[pond] += 1
     else:
@@ -130,9 +132,8 @@ def flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_
                 curr_node = parent_node
                 parent_node = graph.sources[parent_node][0]
 
-
     max_flush_cycles = max(flush_cycles.values())
-    for mem,flush_c in flush_cycles.items():
+    for mem, flush_c in flush_cycles.items():
         flush_cycles[mem] = max_flush_cycles - flush_c
 
     return flush_cycles, max_flush_cycles
@@ -212,7 +213,7 @@ def update_kernel_latencies(
     routing,
     harden_flush,
     pipeline_config_interval,
-    pes_with_packed_ponds
+    pes_with_packed_ponds,
 ):
     kernel_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
@@ -220,11 +221,15 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    flush_latencies, max_flush_cycles = flush_cycles(graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds)
+    flush_latencies, max_flush_cycles = flush_cycles(
+        graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
+    )
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
             node.latency -= max_flush_cycles
-            assert node.latency >= 0, f"{node.kernel} has negative compute kernel latency"
+            assert (
+                node.latency >= 0
+            ), f"{node.kernel} has negative compute kernel latency"
 
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace(
@@ -248,7 +253,7 @@ def update_kernel_latencies(
 
     pond_latencies = {}
     for pond_node in graph.get_ponds():
-        for port,lat in pond_node.input_port_latencies.items():
+        for port, lat in pond_node.input_port_latencies.items():
             if port != "flush":
                 pond_latencies[id_to_name[pond_node.tile_id]] = lat
 
@@ -289,7 +294,7 @@ def pipeline_pnr(
     load_only,
     harden_flush,
     pipeline_config_interval,
-    pes_with_packed_ponds
+    pes_with_packed_ponds,
 ):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
@@ -327,7 +332,7 @@ def pipeline_pnr(
         routing,
         harden_flush,
         pipeline_config_interval,
-        pes_with_packed_ponds
+        pes_with_packed_ponds,
     )
 
     freq_file = os.path.join(app_dir, "design.freq")
