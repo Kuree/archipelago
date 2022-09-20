@@ -283,10 +283,10 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name):
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
-        pe_latency = 1
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():    
+        pe_latency = int(os.environ["PIPELINED"])
     else:
-        pe_latency = 0
+        pe_latency = 1
 
     if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
         io_cycles = 0
@@ -321,10 +321,10 @@ def main():
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
-        pe_latency = 1
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():    
+        pe_latency = int(os.environ["PIPELINED"])
     else:
-        pe_latency = 0
+        pe_latency = 1 
 
     if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
         io_cycles = 0

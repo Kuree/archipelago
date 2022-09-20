@@ -631,14 +631,10 @@ def pipeline_pnr(
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
 
-    placement_save = copy.deepcopy(placement)
-    routing_save = copy.deepcopy(routing)
-    id_to_name_save = copy.deepcopy(id_to_name)
-
-    if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
-        pe_cycles = 1
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
+        pe_cycles = int(os.environ["PIPELINED"])
     else:
-        pe_cycles = 0
+        pe_cycles = 1
 
     if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
         io_cycles = 0
