@@ -19,6 +19,199 @@ from archipelago.pnr_graph import (
 )
 from archipelago.sta import sta, load_graph
 
+# def verboseprint(*args, **kwargs):
+#     print(*args, **kwargs)
+verboseprint = lambda *a, **k: None
+
+class bcolors:
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def find_break_idx(graph, crit_path):
+    crit_path_adjusted = [abs(c - crit_path[-1][1] / 2) for n, c in crit_path]
+    break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
+
+    if len(crit_path) < 2:
+        raise ValueError("Can't find available register on critical path")
+
+    while True:
+        if (
+            isinstance(crit_path[break_idx + 1][0], RouteNode)
+            and crit_path[break_idx + 1][0].route_type == RouteType.RMUX
+            and crit_path[break_idx][0].route_type == RouteType.SB
+        ):
+            return break_idx
+        break_idx += 1
+
+        if break_idx + 1 >= len(crit_path):
+            break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
+
+            while True:
+                if (
+                    isinstance(crit_path[break_idx + 1][0], RouteNode)
+                    and crit_path[break_idx + 1][0].route_type == RouteType.RMUX
+                    and crit_path[break_idx][0].route_type == RouteType.SB
+                ):
+                    return break_idx
+                break_idx -= 1
+
+                if break_idx < 0:
+                    raise ValueError("Can't find available register on critical path")
+
+
+def reg_into_route(routes, g_break_node_source, new_reg_route_source):
+    for net_id, net in routes.items():
+        for route in net:
+            for idx, segment in enumerate(route):
+                if g_break_node_source.to_route() == segment:
+                    route.insert(idx + 1, new_reg_route_source.to_route())
+                    return
+    assert (
+        False
+    ), f"Couldn't find segment {g_break_node_source.to_route()} in routing file"
+
+
+def break_crit_path(graph, id_to_name, crit_path, placement, routes):
+    break_idx = find_break_idx(graph, crit_path)
+
+    break_node_source = crit_path[break_idx][0]
+    break_node_dest = graph.sinks[break_node_source][0]
+
+    assert isinstance(break_node_source, RouteNode)
+    assert break_node_source.route_type == RouteType.SB
+    assert isinstance(break_node_dest, RouteNode)
+    assert break_node_dest.route_type == RouteType.RMUX
+
+    x = break_node_source.x
+    y = break_node_source.y
+    track = break_node_source.track
+    bw = break_node_source.bit_width
+    net_id = break_node_source.net_id
+    kernel = break_node_source.kernel
+    side = break_node_source.side
+    print("\t\tBreaking net:", net_id, "Kernel:", kernel)
+
+    dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
+
+    new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
+    new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
+    new_reg_route_source.reg = True
+    new_reg_route_source.update_tile_id()
+    new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
+    new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
+
+    new_reg_tile.input_port_latencies["reg"] = 1
+    new_reg_tile.input_port_break_path["reg"] = True
+
+    graph.added_regs += 1
+
+    graph.edges.remove((break_node_source, break_node_dest))
+    graph.add_node(new_reg_route_source)
+    graph.add_node(new_reg_tile)
+    graph.add_node(new_reg_route_dest)
+
+    graph.add_edge(break_node_source, new_reg_route_source)
+    graph.add_edge(new_reg_route_source, new_reg_tile)
+    graph.add_edge(new_reg_tile, new_reg_route_dest)
+    graph.add_edge(new_reg_route_dest, break_node_dest)
+
+    reg_into_route(routes, break_node_source, new_reg_route_source)
+    placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
+    id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+
+    graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
+
+
+def break_at(graph, node1, id_to_name, placement, routing):
+    path = []
+    curr_node = node1
+    kernel = curr_node.kernel
+
+    while len(graph.sinks[curr_node]) == 1:
+        if (
+            len(graph.sources[graph.sinks[curr_node][0]]) > 1
+            or graph.sinks[curr_node][0].kernel != kernel
+        ):
+            break
+        curr_node = graph.sinks[curr_node][0]
+
+    idx = 0
+    while len(graph.sources[curr_node]) == 1:
+        if (
+            len(graph.sinks[curr_node]) > 1
+            or graph.sources[curr_node][0].kernel != kernel
+        ):
+            break
+        path.append((curr_node, idx))
+        curr_node = graph.sources[curr_node][0]
+        if curr_node in graph.get_ponds():
+            break
+
+    if curr_node in graph.get_ponds():
+        verboseprint("\t\tFound pond for branch delay matching", curr_node)
+        curr_node.input_port_latencies["data_in_pond"] += 1
+        return
+
+    if len(path) == 0:
+        raise ValueError(f"Cant break at node: {node1}")
+    path.reverse()
+    ret = []
+    for p in path:
+        ret.append((p[0], idx))
+        idx += 1
+    break_crit_path(graph, id_to_name, ret, placement, routing)
+
+
+def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
+    kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
+    for node in kernel_output_nodes:
+        for _ in range(added_delay):
+            break_at(graph, node, id_to_name, placement, routing)
+
+
+def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
+    nodes = graph.topological_sort()
+    node_cycles = {}
+
+    for node in nodes:
+        cycles = set()
+
+        if len(graph.sources[node]) == 0:
+            if node in graph.get_pes():
+                cycles = {None}
+            else:
+                cycles = {0}
+
+        for parent in graph.sources[node]:
+            if parent not in node_cycles:
+                c = 0
+            else:
+                c = node_cycles[parent]
+
+            if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
+                c += node.input_port_latencies[parent.port]
+
+            # Flush signals shouldn't be considered here
+            if "reset" not in node.kernel:
+                cycles.add(c)
+
+        if None in cycles:
+            cycles.remove(None)
+
+        if len(graph.sources[node]) > 1 and len(cycles) > 1:
+            verboseprint(f"Incorrect node delay: {node} {cycles}")
+
+        if len(cycles) > 0:
+            node_cycles[node] = max(cycles)
+        else:
+            node_cycles[node] = None
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     nodes = graph.topological_sort()
@@ -44,7 +237,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             else:
                 c = node_cycles[node.kernel][parent]
 
-            if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
+            if c != None and isinstance(node, TileNode):
                 c += node.input_port_latencies[parent.port]
 
             cycles.add(c)
@@ -53,9 +246,28 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             cycles.remove(None)
 
         if len(cycles) > 1:
-            print(
-                f"\tWarning: Incorrect delay within kernel: {node.kernel} {node} {cycles}"
+            verboseprint(
+                f"\tIncorrect delay within kernel: {node.kernel} {node} {cycles}"
             )
+            verboseprint(f"\tFixing branching delays at: {node} {cycles}")
+            source_cycles = [
+                node_cycles[node.kernel][source]
+                for source in graph.sources[node]
+                if node_cycles[node.kernel][source] != None
+            ]
+            max_parent_cycles = max(source_cycles)
+            for parent in graph.sources[node]:
+                if node_cycles[node.kernel][parent] != max_parent_cycles:
+                    for _ in range(
+                        max_parent_cycles - node_cycles[node.kernel][parent]
+                    ):
+                        break_at(
+                            graph,
+                            graph.sources[parent][0],
+                            id_to_name,
+                            placement,
+                            routing,
+                        )
 
         if len(cycles) > 0:
             node_cycles[node.kernel][node] = max(cycles)
@@ -71,9 +283,17 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
                 kernel_output_nodes_and_delays.append((node, node_delays[node]))
 
         if len(kernel_output_delays) > 1:
-            print(
-                f"\tWarning: Incorrect delay at output of kernel: {kernel} {kernel_output_delays}"
+            verboseprint(
+                f"\tIncorrect delay at output of kernel: {kernel} {kernel_output_delays}"
             )
+            max_parent_cycles = max(kernel_output_delays)
+            for node, delay in kernel_output_nodes_and_delays:
+                if delay != max_parent_cycles:
+                    verboseprint(
+                        f"\tFixing branching delays at: {node} {max_parent_cycles - delay}"
+                    )
+                    for _ in range(max_parent_cycles - delay):
+                        break_at(graph, node, id_to_name, placement, routing)
 
     kernel_latencies = {}
     for kernel in node_cycles:
@@ -82,6 +302,67 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
         kernel_latencies[kernel] = max(kernel_cycles)
 
     return kernel_latencies
+
+def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
+    nodes = kernel_graph.topological_sort()
+    node_cycles = {}
+
+    for node in nodes:
+        cycles = set()
+
+        if len(kernel_graph.sources[node]) == 0:
+            if (
+                node.kernel_type == KernelNodeType.COMPUTE
+                or node.kernel_type == KernelNodeType.MEM
+            ):
+                cycles = {None}
+            else:
+                cycles = {0}
+
+        for parent in kernel_graph.sources[node]:
+            if parent not in node_cycles:
+                c = 0
+            else:
+                c = node_cycles[parent]
+
+            if c is not None:
+                c += node.latency
+
+            if not (
+                "reset" in parent.kernel
+                or (parent.kernel_type == KernelNodeType.MEM and str(parent)[0] == "m")
+            ):
+                cycles.add(c)
+
+        if None in cycles:
+            cycles.remove(None)
+
+        if len(kernel_graph.sources[node]) > 1 and len(cycles) > 1:
+            verboseprint(f"\tIncorrect kernel delay: {node} {cycles}")
+
+            source_cycles = [
+                node_cycles[source]
+                for source in kernel_graph.sources[node]
+                if node_cycles[source] != None
+            ]
+            max_cycle = max(source_cycles)
+            for source in kernel_graph.sources[node]:
+                if node_cycles[source] != None and node_cycles[source] != max_cycle:
+                    verboseprint(
+                        f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}"
+                    )
+                    add_delay_to_kernel(
+                        graph,
+                        source.kernel,
+                        max_cycle - node_cycles[source],
+                        id_to_name,
+                        placement,
+                        routing,
+                    )
+        if len(cycles) > 0:
+            node_cycles[node] = max(cycles)
+        else:
+            node_cycles[node] = None
 
 
 def flush_cycles(
@@ -215,15 +496,22 @@ def update_kernel_latencies(
     pipeline_config_interval,
     pes_with_packed_ponds,
 ):
+    verboseprint("\nBranch delay matching within kernels")
     kernel_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
     )
 
+    verboseprint("\nConstructing kernel graph")
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    flush_latencies, max_flush_cycles = flush_cycles(
-        graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
-    )
+    verboseprint("\nBranch delay matching kernels")
+    branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
+
+    verboseprint("\nChecking delay matching all nodes")
+    branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
+
+    flush_latencies = flush_cycles(graph, harden_flush, pipeline_config_interval)
+
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
             node.latency -= max_flush_cycles
@@ -265,6 +553,41 @@ def update_kernel_latencies(
 
     fout = open(pond_latencies_file, "w")
     fout.write(json.dumps(pond_latencies, indent=4))
+
+def segment_node_to_string(node):
+    if node[0] == "SB":
+        return f"{node[0]} ({node[1]}, {node[2]}, {node[3]}, {node[4]}, {node[5]}, {node[6]})"
+    elif node[0] == "PORT":
+        return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]})"
+    elif node[0] == "REG":
+        return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]}, {node[5]})"
+    elif node[0] == "RMUX":
+        return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]})"
+
+
+def dump_routing_result(dir_name, routing):
+    route_name = os.path.join(dir_name, "design.route")
+    fout = open(route_name, "w")
+
+    for net_id, route in routing.items():
+        fout.write(f"Net ID: {net_id} Segment Size: {len(route)}\n")
+        src = route[0]
+        for seg_index, segment in enumerate(route):
+            fout.write(f"Segment: {seg_index} Size: {len(segment)}\n")
+
+            for node in segment:
+                fout.write(f"{segment_node_to_string(node)}\n")
+        fout.write("\n")
+
+
+def dump_placement_result(dir_name, placement, id_to_name):
+    place_name = os.path.join(dir_name, "design.place")
+    fout = open(place_name, "w")
+    fout.write("Block Name			X	Y		#Block ID\n")
+    fout.write("---------------------------\n")
+
+    for tile_id, place in placement.items():
+        fout.write(f"{id_to_name[tile_id]}\t\t{place[0]}\t{place[1]}\t\t#{tile_id}\n")
 
 
 def dump_id_to_name(app_dir, id_to_name):
@@ -322,7 +645,64 @@ def pipeline_pnr(
         io_latency=io_cycles,
     )
 
+    if "POST_PNR_ITR" in os.environ:
+        if os.environ["POST_PNR_ITR"] == "None":
+            max_itr = None
+        else:
+            max_itr = int(os.environ["POST_PNR_ITR"])
+    else:
+        max_itr = 0
+    curr_freq = 0
+    itr = 0
     curr_freq, crit_path, crit_nets = sta(graph)
+    while max_itr == None:
+        try:
+            kernel_latencies = update_kernel_latencies(
+                app_dir,
+                graph,
+                id_to_name,
+                placement,
+                routing,
+                harden_flush,
+                pipeline_config_interval,
+            )
+            break_crit_path(graph, id_to_name, crit_path, placement, routing)
+            curr_freq, crit_path, crit_nets = sta(graph)
+            graph.regs = None
+            kernel_latencies = update_kernel_latencies(
+                app_dir,
+                graph,
+                id_to_name,
+                placement,
+                routing,
+                harden_flush,
+                pipeline_config_interval,
+            )
+        except:
+            max_itr = itr
+        itr += 1
+
+       
+    print("\nCan break", max_itr, "critical paths")
+
+    id_to_name = id_to_name_save
+    placement = placement_save
+    routing = routing_save
+    graph = construct_graph(
+        placement,
+        routing,
+        id_to_name,
+        netlist,
+        pe_latency=pe_cycles,
+        pond_latency=0,
+        io_latency=io_cycles,
+    )
+    starting_regs = graph.added_regs
+    curr_freq, crit_path, crit_nets = sta(graph)
+
+    for _ in range(max_itr):
+        break_crit_path(graph, id_to_name, crit_path, placement, routing)
+        curr_freq, crit_path, crit_nets = sta(graph)
 
     update_kernel_latencies(
         app_dir,
@@ -340,5 +720,12 @@ def pipeline_pnr(
     fout.write(f"{curr_freq}\n")
 
     dump_id_to_name(app_dir, id_to_name)
+
+    if max_itr == 0:
+        print(bcolors.WARNING + "\nCouldn't break any paths" + bcolors.ENDC)
+    else:
+        print(bcolors.OKGREEN + "\nBroke", max_itr, "critical paths" + bcolors.ENDC)
+
+    print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
 
     return placement, routing, id_to_name
