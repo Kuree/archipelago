@@ -19,19 +19,24 @@ from archipelago.pnr_graph import (
 )
 from archipelago.sta import sta, load_graph
 
-# def verboseprint(*args, **kwargs):
-#     print(*args, **kwargs)
-verboseprint = lambda *a, **k: None
+
+def verboseprint(*args, **kwargs):
+    print(*args, **kwargs)
+
+
+# verboseprint = lambda *a, **k: None
+
 
 class bcolors:
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
 
 def find_break_idx(graph, crit_path):
     crit_path_adjusted = [abs(c - crit_path[-1][1] / 2) for n, c in crit_path]
@@ -95,7 +100,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     net_id = break_node_source.net_id
     kernel = break_node_source.kernel
     side = break_node_source.side
-    print("\t\tBreaking net:", net_id, "Kernel:", kernel)
+    print("\nBreaking net:", net_id, "Kernel:", kernel)
 
     dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
@@ -213,6 +218,7 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
         else:
             node_cycles[node] = None
 
+
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     nodes = graph.topological_sort()
     node_cycles = {}
@@ -302,6 +308,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
         kernel_latencies[kernel] = max(kernel_cycles)
 
     return kernel_latencies
+
 
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
     nodes = kernel_graph.topological_sort()
@@ -496,21 +503,19 @@ def update_kernel_latencies(
     pipeline_config_interval,
     pes_with_packed_ponds,
 ):
-    verboseprint("\nBranch delay matching within kernels")
     kernel_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
     )
 
-    verboseprint("\nConstructing kernel graph")
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    verboseprint("\nBranch delay matching kernels")
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
-    verboseprint("\nChecking delay matching all nodes")
     branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
-    flush_latencies = flush_cycles(graph, harden_flush, pipeline_config_interval)
+    flush_latencies, max_flush_cycles = flush_cycles(
+        graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
+    )
 
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
@@ -553,6 +558,7 @@ def update_kernel_latencies(
 
     fout = open(pond_latencies_file, "w")
     fout.write(json.dumps(pond_latencies, indent=4))
+
 
 def segment_node_to_string(node):
     if node[0] == "SB":
@@ -625,6 +631,10 @@ def pipeline_pnr(
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
 
+    placement_save = copy.deepcopy(placement)
+    routing_save = copy.deepcopy(routing)
+    id_to_name_save = copy.deepcopy(id_to_name)
+
     if "PIPELINED" in os.environ and os.environ["PIPELINED"] == "1":
         pe_cycles = 1
     else:
@@ -645,64 +655,8 @@ def pipeline_pnr(
         io_latency=io_cycles,
     )
 
-    if "POST_PNR_ITR" in os.environ:
-        if os.environ["POST_PNR_ITR"] == "None":
-            max_itr = None
-        else:
-            max_itr = int(os.environ["POST_PNR_ITR"])
-    else:
-        max_itr = 0
-    curr_freq = 0
-    itr = 0
+    print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
-    while max_itr == None:
-        try:
-            kernel_latencies = update_kernel_latencies(
-                app_dir,
-                graph,
-                id_to_name,
-                placement,
-                routing,
-                harden_flush,
-                pipeline_config_interval,
-            )
-            break_crit_path(graph, id_to_name, crit_path, placement, routing)
-            curr_freq, crit_path, crit_nets = sta(graph)
-            graph.regs = None
-            kernel_latencies = update_kernel_latencies(
-                app_dir,
-                graph,
-                id_to_name,
-                placement,
-                routing,
-                harden_flush,
-                pipeline_config_interval,
-            )
-        except:
-            max_itr = itr
-        itr += 1
-
-       
-    print("\nCan break", max_itr, "critical paths")
-
-    id_to_name = id_to_name_save
-    placement = placement_save
-    routing = routing_save
-    graph = construct_graph(
-        placement,
-        routing,
-        id_to_name,
-        netlist,
-        pe_latency=pe_cycles,
-        pond_latency=0,
-        io_latency=io_cycles,
-    )
-    starting_regs = graph.added_regs
-    curr_freq, crit_path, crit_nets = sta(graph)
-
-    for _ in range(max_itr):
-        break_crit_path(graph, id_to_name, crit_path, placement, routing)
-        curr_freq, crit_path, crit_nets = sta(graph)
 
     update_kernel_latencies(
         app_dir,
@@ -715,17 +669,94 @@ def pipeline_pnr(
         pes_with_packed_ponds,
     )
 
+    if "POST_PNR_ITR" in os.environ:
+        if os.environ["POST_PNR_ITR"] == "max":
+            max_itr = None
+        else:
+            max_itr = int(os.environ["POST_PNR_ITR"])
+
+        curr_freq = 0
+        itr = 0
+
+        while max_itr == None:
+            try:
+                break_crit_path(graph, id_to_name, crit_path, placement, routing)
+                graph.regs = None
+                kernel_latencies = update_kernel_latencies(
+                    app_dir,
+                    graph,
+                    id_to_name,
+                    placement,
+                    routing,
+                    harden_flush,
+                    pipeline_config_interval,
+                    pes_with_packed_ponds,
+                )
+
+                print("\nIteration", itr + 1, "frequency")
+                curr_freq, crit_path, crit_nets = sta(graph)
+            except:
+                max_itr = itr
+            itr += 1
+
+        print("\nCan break", max_itr, "critical paths")
+
+        # Reloading best result
+        id_to_name = id_to_name_save
+        placement = placement_save
+        routing = routing_save
+        graph = construct_graph(
+            placement,
+            routing,
+            id_to_name,
+            netlist,
+            pe_latency=pe_cycles,
+            pond_latency=0,
+            io_latency=io_cycles,
+        )
+        starting_regs = graph.added_regs
+
+        kernel_latencies = update_kernel_latencies(
+            app_dir,
+            graph,
+            id_to_name,
+            placement,
+            routing,
+            harden_flush,
+            pipeline_config_interval,
+            pes_with_packed_ponds,
+        )
+
+        for _ in range(max_itr):
+            curr_freq, crit_path, crit_nets = sta(graph)
+            break_crit_path(graph, id_to_name, crit_path, placement, routing)
+
+        kernel_latencies = update_kernel_latencies(
+            app_dir,
+            graph,
+            id_to_name,
+            placement,
+            routing,
+            harden_flush,
+            pipeline_config_interval,
+            pes_with_packed_ponds,
+        )
+        print("\nFinal application frequency:")
+        curr_freq, crit_path, crit_nets = sta(graph)
+
+        if max_itr == 0:
+            print(bcolors.WARNING + "\nCouldn't break any paths" + bcolors.ENDC)
+        else:
+            print(bcolors.OKGREEN + "\nBroke", max_itr, "critical paths" + bcolors.ENDC)
+
+        print(
+            "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
+        )
+
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
 
     dump_id_to_name(app_dir, id_to_name)
-
-    if max_itr == 0:
-        print(bcolors.WARNING + "\nCouldn't break any paths" + bcolors.ENDC)
-    else:
-        print(bcolors.OKGREEN + "\nBroke", max_itr, "critical paths" + bcolors.ENDC)
-
-    print("\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n")
 
     return placement, routing, id_to_name
