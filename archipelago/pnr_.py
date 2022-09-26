@@ -7,6 +7,7 @@ from .route import route
 from .io import dump_packing_result, load_routing_result, dump_placement_result
 from .util import parse_routing_result, get_max_num_col, get_group_size
 import pycyclone
+import pythunder
 from archipelago.pipeline import pipeline_pnr
 from .sta import sta, run_sta
 from .pnr_graph import construct_graph
@@ -75,7 +76,6 @@ def pnr(
         packed_file = dump_packed_result(
             app_name, cwd, input_netlist, id_to_name, copy_to_dir=copy_to_dir
         )
-
     # get the layout and routing file
     with open(arch_file) as f:
         layout_line = f.readline()
@@ -99,6 +99,9 @@ def pnr(
         has_fixed = True
     else:
         has_fixed = False
+
+    if id_to_name is None:
+        id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
 
     pnr_placer_exp_set = False
     if not load_only:

@@ -378,7 +378,7 @@ def flush_cycles(
     if harden_flush:
         flush_cycles = {}
         for mem in graph.get_mems() + graph.get_ponds():
-            if mem.y == 0:
+            if mem.y == 0 or pipeline_config_interval == 0:
                 flush_cycles[mem] = 0
             else:
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
@@ -389,7 +389,7 @@ def flush_cycles(
         for pe in graph.get_pes():
             if pe.tile_id in pes_with_packed_ponds:
                 pond = pes_with_packed_ponds[pe.tile_id]
-                if pe.y == 0:
+                if pe.y == 0 or pipeline_config_interval == 0:
                     flush_cycles[pond] = 0
                 else:
                     flush_cycles[pond] = (pe.y - 1) // pipeline_config_interval

@@ -260,13 +260,13 @@ def load_graph(graph_files):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser("CGRA Retiming tool")
+    parser = argparse.ArgumentParser("CGRA timing analysis tool")
     parser.add_argument(
         "-a", "--app", "-d", required=True, dest="application", type=str
     )
     parser.add_argument("-v", "--visualize", action="store_true")
     args = parser.parse_args()
-    dirname = os.path.join(args.application, "bin")
+    dirname = args.application #os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
     assert os.path.exists(netlist), netlist + " does not exist"
     placement = os.path.join(dirname, "design.place")
@@ -292,7 +292,6 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name):
         io_cycles = 0
     else:
         io_cycles = 1
-
     routing_result_graph = construct_graph(
         placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles
     )
@@ -342,6 +341,8 @@ def main():
         graph1 = os.path.join(dirname, "1.graph")
         assert os.path.exists(graph1), route + " does not exists"
         graph16 = os.path.join(dirname, "16.graph")
+        if not os.path.exists(graph16):
+            graph16 = os.path.join(dirname, "17.graph")
         assert os.path.exists(graph16), route + " does not exists"
         routing_graphs = load_graph([graph1, graph16])
 
