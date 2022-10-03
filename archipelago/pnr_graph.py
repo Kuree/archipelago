@@ -644,10 +644,11 @@ class RoutingResultGraph:
 
 
 def construct_graph(
-    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0
+    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0, sparse=False
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
+    graph.sparse = sparse
     graph.gen_placement(placement, netlist)
 
     max_reg_id = 0

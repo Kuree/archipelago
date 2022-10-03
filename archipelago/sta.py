@@ -188,6 +188,9 @@ def sta(graph):
                         comp = PathComponents()
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(graph, node, parent, comp, mem_tile_column)
+                    if graph.sparse:
+                        # Lookback path for ready/valid
+                        calc_sb_delay(graph, node, parent, comp, mem_tile_column)
                 elif node.route_type == RouteType.RMUX:
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
@@ -265,6 +268,7 @@ def parse_args():
         "-a", "--app", "-d", required=True, dest="application", type=str
     )
     parser.add_argument("-v", "--visualize", action="store_true")
+    parser.add_argument("-s", "--sparse", action="store_true")
     args = parser.parse_args()
     dirname = args.application #os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
@@ -274,10 +278,10 @@ def parse_args():
     route = os.path.join(dirname, "design.route")
     assert os.path.exists(route), route + " does not exists"
     id_to_name_filename = os.path.join(dirname, "design.id_to_name")
-    return netlist, placement, route, id_to_name_filename, args.visualize
+    return netlist, placement, route, id_to_name_filename, args.visualize, args.sparse
 
 
-def run_sta(packed_file, placement_file, routing_file, id_to_name):
+def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
 
     netlist, buses = pythunder.io.load_netlist(packed_file)
     placement = load_placement(placement_file)
@@ -292,8 +296,9 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name):
         io_cycles = 0
     else:
         io_cycles = 1
+        
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles
+        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
@@ -308,6 +313,7 @@ def main():
         routing_file,
         id_to_name_filename,
         visualize,
+        sparse
     ) = parse_args()
 
     netlist, buses = pythunder.io.load_netlist(packed_file)
@@ -331,7 +337,7 @@ def main():
         io_cycles = 1
 
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles
+        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)

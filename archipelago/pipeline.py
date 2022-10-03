@@ -22,8 +22,6 @@ from archipelago.sta import sta, load_graph
 
 def verboseprint(*args, **kwargs):
     print(*args, **kwargs)
-
-
 # verboseprint = lambda *a, **k: None
 
 
@@ -45,29 +43,43 @@ def find_break_idx(graph, crit_path):
     if len(crit_path) < 2:
         raise ValueError("Can't find available register on critical path")
 
-    while True:
-        if (
-            isinstance(crit_path[break_idx + 1][0], RouteNode)
-            and crit_path[break_idx + 1][0].route_type == RouteType.RMUX
-            and crit_path[break_idx][0].route_type == RouteType.SB
-        ):
-            return break_idx
-        break_idx += 1
+    if graph.sparse and len(crit_path) < 5:
+        raise ValueError("Can't find available FIFO on critical path")
 
-        if break_idx + 1 >= len(crit_path):
-            break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
+    min_path = crit_path[-1][1]
+    min_idx = -1
 
-            while True:
-                if (
-                    isinstance(crit_path[break_idx + 1][0], RouteNode)
-                    and crit_path[break_idx + 1][0].route_type == RouteType.RMUX
-                    and crit_path[break_idx][0].route_type == RouteType.SB
-                ):
-                    return break_idx
-                break_idx -= 1
+    if graph.sparse:
+        for idx, node in enumerate(crit_path[:-4]):
+            if (
+                node[0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 1][0], RouteNode)
+                and crit_path[idx + 1][0].route_type == RouteType.RMUX
+                and isinstance(crit_path[idx + 2][0], RouteNode)
+                and crit_path[idx + 2][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 3][0], RouteNode)
+                and crit_path[idx + 3][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 4][0], RouteNode)
+                and crit_path[idx + 4][0].route_type == RouteType.RMUX
+            ):
+                if crit_path_adjusted[idx] < min_path:
+                    min_path = crit_path_adjusted[idx]
+                    min_idx = idx
+    else:
+        for idx, node in enumerate(crit_path[:-1]):
+            if (
+                node[0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 1][0], RouteNode)
+                and crit_path[idx + 1][0].route_type == RouteType.RMUX
+            ):
+                if crit_path_adjusted[idx] < min_path:
+                    min_path = crit_path_adjusted[idx]
+                    min_idx = idx
 
-                if break_idx < 0:
-                    raise ValueError("Can't find available register on critical path")
+    if min_idx == -1:
+        raise ValueError("Can't find available register on critical path")
+
+    return min_idx
 
 
 def reg_into_route(routes, g_break_node_source, new_reg_route_source):
@@ -132,6 +144,56 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
+
+    if graph.sparse:
+        break_idx += 3
+        break_node_source = crit_path[break_idx][0]
+        break_node_dest = graph.sinks[break_node_source][0]
+
+        assert isinstance(break_node_source, RouteNode)
+        assert break_node_source.route_type == RouteType.SB
+        assert isinstance(break_node_dest, RouteNode)
+        assert break_node_dest.route_type == RouteType.RMUX
+
+        x = break_node_source.x
+        y = break_node_source.y
+        track = break_node_source.track
+        bw = break_node_source.bit_width
+        net_id = break_node_source.net_id
+        kernel = break_node_source.kernel
+        side = break_node_source.side
+        print("\nBreaking net:", net_id, "Kernel:", kernel)
+
+        dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
+
+        new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
+        new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
+        new_reg_route_source.reg = True
+        new_reg_route_source.update_tile_id()
+        new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
+        new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
+
+        new_reg_tile.input_port_latencies["reg"] = 1
+        new_reg_tile.input_port_break_path["reg"] = True
+
+        graph.added_regs += 1
+
+        graph.edges.remove((break_node_source, break_node_dest))
+        graph.add_node(new_reg_route_source)
+        graph.add_node(new_reg_tile)
+        graph.add_node(new_reg_route_dest)
+
+        graph.add_edge(break_node_source, new_reg_route_source)
+        graph.add_edge(new_reg_route_source, new_reg_tile)
+        graph.add_edge(new_reg_tile, new_reg_route_dest)
+        graph.add_edge(new_reg_route_dest, break_node_dest)
+
+        reg_into_route(routes, break_node_source, new_reg_route_source)
+        placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
+        id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+
+        graph.update_sources_and_sinks()
+        graph.update_edge_kernels()
 
 
 def break_at(graph, node1, id_to_name, placement, routing):
@@ -387,7 +449,7 @@ def flush_cycles(
             flush_cycles[mem] += 1
 
         for pe in graph.get_pes():
-            if pe.tile_id in pes_with_packed_ponds:
+            if pes_with_packed_ponds is not None and pe.tile_id in pes_with_packed_ponds:
                 pond = pes_with_packed_ponds[pe.tile_id]
                 if pe.y == 0 or pipeline_config_interval == 0:
                     flush_cycles[pond] = 0
@@ -502,7 +564,11 @@ def update_kernel_latencies(
     harden_flush,
     pipeline_config_interval,
     pes_with_packed_ponds,
+    sparse
 ):
+    if sparse:
+        return 
+
     kernel_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
     )
@@ -624,12 +690,17 @@ def pipeline_pnr(
     harden_flush,
     pipeline_config_interval,
     pes_with_packed_ponds,
+    sparse
 ):
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
+
+    placement_save = copy.deepcopy(placement)
+    routing_save = copy.deepcopy(routing)
+    id_to_name_save = copy.deepcopy(id_to_name)
 
     if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
         pe_cycles = int(os.environ["PIPELINED"])
@@ -649,6 +720,7 @@ def pipeline_pnr(
         pe_latency=pe_cycles,
         pond_latency=0,
         io_latency=io_cycles,
+        sparse=sparse
     )
 
     print("\nApplication Frequency:")
@@ -663,6 +735,7 @@ def pipeline_pnr(
         harden_flush,
         pipeline_config_interval,
         pes_with_packed_ponds,
+        sparse
     )
 
     if "POST_PNR_ITR" in os.environ:
@@ -678,7 +751,7 @@ def pipeline_pnr(
             try:
                 break_crit_path(graph, id_to_name, crit_path, placement, routing)
                 graph.regs = None
-                kernel_latencies = update_kernel_latencies(
+                update_kernel_latencies(
                     app_dir,
                     graph,
                     id_to_name,
@@ -687,6 +760,7 @@ def pipeline_pnr(
                     harden_flush,
                     pipeline_config_interval,
                     pes_with_packed_ponds,
+                    sparse
                 )
 
                 print("\nIteration", itr + 1, "frequency")
@@ -709,10 +783,11 @@ def pipeline_pnr(
             pe_latency=pe_cycles,
             pond_latency=0,
             io_latency=io_cycles,
+            sparse=sparse
         )
         starting_regs = graph.added_regs
 
-        kernel_latencies = update_kernel_latencies(
+        update_kernel_latencies(
             app_dir,
             graph,
             id_to_name,
@@ -721,13 +796,14 @@ def pipeline_pnr(
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
+            sparse
         )
 
         for _ in range(max_itr):
             curr_freq, crit_path, crit_nets = sta(graph)
             break_crit_path(graph, id_to_name, crit_path, placement, routing)
 
-        kernel_latencies = update_kernel_latencies(
+        update_kernel_latencies(
             app_dir,
             graph,
             id_to_name,
@@ -736,6 +812,7 @@ def pipeline_pnr(
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
+            sparse
         )
         print("\nFinal application frequency:")
         curr_freq, crit_path, crit_nets = sta(graph)
@@ -753,6 +830,8 @@ def pipeline_pnr(
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
 
+    dump_routing_result(app_dir, routing)
+    dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name

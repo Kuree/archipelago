@@ -35,6 +35,7 @@ def pnr(
     harden_flush=False,
     pipeline_config_interval=0,
     pes_with_packed_ponds=None,
+    sparse=False
 ):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
@@ -163,7 +164,7 @@ def pnr(
 
                 if routed:
                     freq = run_sta(
-                        packed_file, placement_filename, route_filename, id_to_name
+                        packed_file, placement_filename, route_filename, id_to_name, sparse
                     )
                     if freq > max_freq:
                         max_freq = freq
@@ -246,7 +247,7 @@ def pnr(
     routing_result = load_routing_result(route_filename)
 
     if id_to_name is not None:
-        placement, routing, id_to_name = pipeline_pnr(
+        placement_result, routing_result, id_to_name = pipeline_pnr(
             cwd,
             placement_result,
             routing_result,
@@ -256,6 +257,7 @@ def pnr(
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
+            sparse
         )
 
     # tear down
