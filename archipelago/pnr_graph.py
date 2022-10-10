@@ -205,12 +205,7 @@ class RoutingResultGraph:
             mems = []
             for node in self.nodes:
                 if isinstance(node, TileNode) and node.tile_type == TileType.MEM:
-                    rom = False
-                    for source in self.sources[node]:
-                        if self.get_node(source).port == "ren_in_0":
-                            rom = True
-                            break
-                    if rom:
+                    if "rom_" in self.id_to_name[node.tile_id]:
                         mems.append(node)
             self.roms = mems
         return self.roms
@@ -286,6 +281,38 @@ class RoutingResultGraph:
                     ios.append(node)
             self.output_ios = ios
         return self.output_ios
+
+    def get_inputs_of_kernel(self, kernel):
+        kernel_nodes = set()
+        for node in self.nodes:
+            if node.kernel == kernel:
+                kernel_nodes.add(node)
+
+        kernel_input_nodes = set()
+
+        for sink in kernel_nodes:
+            visited = set()
+            queue = []
+
+            queue.append(sink)
+            visited.add(sink)
+
+            while queue:
+                n = queue.pop()
+
+                if n.kernel != kernel:
+                    kernel_input_nodes.add(sink)
+                    break
+                elif n != sink:
+                    continue
+
+                for node in self.sources[n]:
+                    if node not in visited:
+                        queue.append(node)
+                        visited.add(node)
+        if len(kernel_input_nodes) == 0:
+            breakpoint()
+        return kernel_input_nodes
 
     def get_outputs_of_kernel(self, kernel):
         kernel_nodes = set()
@@ -724,7 +751,7 @@ def construct_graph(
                     if "rom_" in id_to_name[tile_id]:
                         tile.input_port_latencies[port] = 1
                         tile.input_port_break_path[port] = True
-                    elif "flush" in port or "chain" in port:
+                    elif "flush" in port or "input_width_16_num_0" in port or "input_width_16_num_1" in port:
                         tile.input_port_latencies[port] = 0
                         tile.input_port_break_path[port] = False
                     else:

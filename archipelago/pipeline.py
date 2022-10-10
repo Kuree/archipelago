@@ -283,93 +283,71 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     nodes = graph.topological_sort()
+    nodes.reverse()
     node_cycles = {}
 
     for node in nodes:
-        cycles = set()
 
         if node.kernel not in node_cycles:
             node_cycles[node.kernel] = {}
 
-        if len(graph.sources[node]) == 0:
-            if node in graph.get_pes():
-                cycles = {None}
+        cycles = set()
+        if len(graph.sinks[node]) == 0:
+            cycles = {0}
+
+        for sink in graph.sinks[node]:
+            if sink not in node_cycles[node.kernel]:
+                node_cycles[node.kernel][sink] = 0
+
+            c = node_cycles[node.kernel][sink]
+
+            if c != None and isinstance(sink, TileNode):
+                c += sink.input_port_latencies[node.port]
             elif node in graph.get_input_ios():
-                cycles = {node.input_port_latencies["output"]}
-            else:
-                cycles = {0}
+                # Need special case for input IOs
+                c += node.input_port_latencies["output"]
 
-        for parent in graph.sources[node]:
-            if parent not in node_cycles[node.kernel]:
-                c = 0
-            else:
-                c = node_cycles[node.kernel][parent]
-
-            if c != None and isinstance(node, TileNode):
-                c += node.input_port_latencies[parent.port]
-
+            if isinstance(node, TileNode) and node.tile_type == TileType.PE and sink.port == "PondTop_output_width_17_num_0":
+                continue
             cycles.add(c)
 
         if None in cycles:
             cycles.remove(None)
+
 
         if len(cycles) > 1:
             verboseprint(
                 f"\tIncorrect delay within kernel: {node.kernel} {node} {cycles}"
             )
             verboseprint(f"\tFixing branching delays at: {node} {cycles}")
-            source_cycles = [
-                node_cycles[node.kernel][source]
-                for source in graph.sources[node]
-                if node_cycles[node.kernel][source] != None
+            sink_cycles = [
+                node_cycles[node.kernel][sink]
+                for sink in graph.sinks[node]
+                if node_cycles[node.kernel][sink] != None
             ]
-            max_parent_cycles = max(source_cycles)
-            for parent in graph.sources[node]:
-                if node_cycles[node.kernel][parent] != max_parent_cycles:
-                    for _ in range(
-                        max_parent_cycles - node_cycles[node.kernel][parent]
-                    ):
-                        break_at(
-                            graph,
-                            graph.sources[parent][0],
-                            id_to_name,
-                            placement,
-                            routing,
-                        )
-
-        if len(cycles) > 0:
+            max_sink_cycles = max(sink_cycles)
+            for sink in graph.sinks[node]:
+                for _ in range(
+                    max_sink_cycles - node_cycles[node.kernel][sink]
+                ):
+                    break_at(
+                        graph,
+                        node,
+                        id_to_name,
+                        placement,
+                        routing,
+                    )
+            node_cycles[node.kernel][node] = max(cycles)
+        elif len(cycles) == 1:
             node_cycles[node.kernel][node] = max(cycles)
         else:
             node_cycles[node.kernel][node] = None
 
-    for kernel, node_delays in node_cycles.items():
-        kernel_output_delays = set()
-        kernel_output_nodes_and_delays = []
-        for node in graph.get_outputs_of_kernel(kernel):
-            if node_delays[node] != None:
-                kernel_output_delays.add(node_delays[node])
-                kernel_output_nodes_and_delays.append((node, node_delays[node]))
-
-        if len(kernel_output_delays) > 1:
-            verboseprint(
-                f"\tIncorrect delay at output of kernel: {kernel} {kernel_output_delays}"
-            )
-            max_parent_cycles = max(kernel_output_delays)
-            for node, delay in kernel_output_nodes_and_delays:
-                if delay != max_parent_cycles:
-                    verboseprint(
-                        f"\tFixing branching delays at: {node} {max_parent_cycles - delay}"
-                    )
-                    for _ in range(max_parent_cycles - delay):
-                        break_at(graph, node, id_to_name, placement, routing)
-
     kernel_latencies = {}
     for kernel in node_cycles:
-        kernel_cycles = [cyc for cyc in node_cycles[kernel].values() if cyc != None]
-        kernel_cycles.append(0)
-        kernel_latencies[kernel] = max(kernel_cycles)
+        kernel_latencies[kernel] = max(node_cycles[kernel].values())
 
-    return kernel_latencies
+    return kernel_latencies, node_cycles
 
 
 def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing):
@@ -485,68 +463,70 @@ def flush_cycles(
 
 
 def find_closest_match(kernel_target, candidates):
-    junk = ["hcompute", "cgra", "global", "wrapper", "clkwrk", "stencil", "op"]
+    candidates = [c for c in candidates if "io1_" not in c]
 
-    cleaned_candidates = candidates.copy()
-    for idx, key in enumerate(candidates):
-        cleaned_candidates[idx] = cleaned_candidates[idx].split("_")
-        for j in junk:
-            if j in cleaned_candidates[idx]:
-                cleaned_candidates[idx] = [c for c in cleaned_candidates[idx] if c != j]
-    kernel_target = kernel_target.split("_")
-    if "clkwrk" in kernel_target:
-        del kernel_target[
-            kernel_target.index("clkwrk") : kernel_target.index("clkwrk") + 2
-        ]
+    if "op_" + kernel_target in candidates:
+        return "op_" + kernel_target
 
-    for j in junk:
-        if j in kernel_target:
-            kernel_target = [k for k in kernel_target if k != j]
+    kernel_target_out = kernel_target + "_write"
+    for c in candidates:
+        if kernel_target_out in c:
+            return c
 
-    matches_and_ratios = []
+    kernel_target_in = kernel_target + "_read"
+    kernel_target_in = kernel_target_in.replace("global_wrapper_global_wrapper", "global_wrapper_glb")
+    for c in candidates:
+        if kernel_target_in in c:
+            return c
 
-    for idx, candidate in enumerate(cleaned_candidates):
-        ratio = 0
-        if "glb" not in candidate:
-            for a in candidate:
-                if a in kernel_target:
-                    ratio += 1
-        matches_and_ratios.append((candidates[idx], ratio))
+    kernel_target_in = kernel_target + "_read"
+    kernel_target_in = kernel_target_in.replace("cgra", "glb")
+    for c in candidates:
+        if kernel_target_in in c:
+            return c
 
-    return max(matches_and_ratios, key=lambda item: item[1])[0]
+    print("No match for", kernel_target)
 
 
-def calculate_latencies(kernel_graph, kernel_latencies):
+def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies):
+
     nodes = kernel_graph.topological_sort()
-    new_latencies = {}
+    max_latencies = {}
     flush_latencies = {}
 
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.COMPUTE:
-            new_latencies[node.kernel] = node.latency
+            max_latencies[node.kernel] = node.latency
 
-    for node16 in new_latencies:
-        for node1 in new_latencies:
+    for node16 in max_latencies:
+        for node1 in max_latencies:
             if (
                 node16 != node1
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
-                new_latencies[node16] -= new_latencies[node1]
-                new_latencies[node1] = 0
+                max_latencies[node16] -= max_latencies[node1]
+                max_latencies[node1] = 0
 
-    # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
-    sorted_new_latencies = {}
-    for k in sorted(new_latencies, key=lambda a: len(str(a)), reverse=True):
-        sorted_new_latencies[k] = new_latencies[k]
+    for kernel, latency_dict in kernel_latencies.items():
+        if "_glb_" in kernel:
+            continue
+        match = find_closest_match(kernel, list(node_latencies.keys()))
+        if match is not None:
+            for kernel_port, d1 in latency_dict.items():
+                for port_num, d2 in d1.items():
+                    if d2['pe_port'] == '' and match in max_latencies:
+                        kernel_latencies[kernel][kernel_port][port_num]["latency"] = max_latencies[match]
+                    else:
+                        found = False
+                        for pe in graph.get_tiles():
+                            if graph.id_to_name[str(pe)] == f'{match}$inner_compute${d2["pe_port"]}':
+                                kernel_latencies[kernel][kernel_port][port_num]["latency"] = node_latencies[match][graph.sources[pe][0]]
+                                found = True
+                                break
+                        if not found:
+                            print("Couldn't find tile port in kernel latencies", kernel)
 
-    for graph_kernel, lat in sorted_new_latencies.items():
-        if "op_" in graph_kernel and graph_kernel.split("op_")[1] in kernel_latencies:
-            kernel_latencies[graph_kernel.split("op_")[1]] = lat
-        elif "io16" in graph_kernel:
-            # Used for input/output kernels
-            match = find_closest_match(graph_kernel, list(kernel_latencies.keys()))
-            kernel_latencies[match] = lat
     return kernel_latencies
 
 
@@ -564,7 +544,7 @@ def update_kernel_latencies(
     if sparse:
         return 
 
-    kernel_latencies = branch_delay_match_within_kernels(
+    kernel_latencies, node_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
     )
 
@@ -572,12 +552,11 @@ def update_kernel_latencies(
 
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
-    branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
+    # branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
     flush_latencies, max_flush_cycles = flush_cycles(
         graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
     )
-
     for node in kernel_graph.nodes:
         if "io16in" in node.kernel or "io1in" in node.kernel:
             node.latency -= max_flush_cycles
@@ -599,7 +578,7 @@ def update_kernel_latencies(
     existing_kernel_latencies = json.load(f)
 
     matched_kernel_latencies = calculate_latencies(
-        kernel_graph, existing_kernel_latencies
+        graph, kernel_graph, node_latencies, existing_kernel_latencies
     )
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
