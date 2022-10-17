@@ -445,9 +445,6 @@ def flush_cycles(
             else:
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
 
-            # Pipeling register at top of array
-            flush_cycles[mem] += 1
-
         for pe in graph.get_pes():
             if pes_with_packed_ponds is not None and pe.tile_id in pes_with_packed_ponds:
                 pond = pes_with_packed_ponds[pe.tile_id]
@@ -456,8 +453,6 @@ def flush_cycles(
                 else:
                     flush_cycles[pond] = (pe.y - 1) // pipeline_config_interval
 
-                # Pipeling register at top of array
-                flush_cycles[pond] += 1
     else:
         for io in graph.get_input_ios():
             if io.kernel == "io1in_reset":
