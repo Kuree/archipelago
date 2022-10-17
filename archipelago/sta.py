@@ -66,7 +66,7 @@ def get_mem_tile_columns(graph):
     return mem_column
 
 
-def calc_sb_delay(graph, node, parent, comp, mem_column):
+def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
     # Need to associate each sb hop with these catagories:
     # mem2pe_clk
     # pe2mem_clk
@@ -75,11 +75,6 @@ def calc_sb_delay(graph, node, parent, comp, mem_column):
     # pe2pe_west_east_input_clk
     # mem_endpoint_sb
     # pe_endpoint_sb
-
-    if parent.bit_width == 1:
-        type_ = "B1"
-    else:
-        type_ = "B17"
 
     if parent.io == 0:
         # Its the input to the SB
@@ -128,17 +123,55 @@ def calc_sb_delay(graph, node, parent, comp, mem_column):
 
         side_to_dir = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
-        if (parent.x + 1) % mem_column == 0:
-            comp.sb_delay.append(
-                comp.delays[
-                    f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
-                ]
-            )
-        else:
-            comp.sb_delay.append(
-                comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
-            )
 
+        if not sparse:
+            if parent.bit_width == 1:
+                type_ = "B1"
+            else:
+                type_ = "B17"
+
+            if (parent.x + 1) % mem_column == 0:
+                comp.sb_delay.append(
+                    comp.delays[
+                        f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                    ]
+                )
+            else:
+                comp.sb_delay.append(
+                    comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                )
+        else:
+            if parent.bit_width == 1:
+                type_ = "B1_valid"
+            else:
+                type_ = "B17_valid"
+
+            if (parent.x + 1) % mem_column == 0:
+                comp.sb_delay.append(
+                    comp.delays[
+                        f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                    ]
+                )
+            else:
+                comp.sb_delay.append(
+                    comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                )
+
+            if parent.bit_width == 1:
+                type_ = "B1_ready"
+            else:
+                type_ = "B17_ready"
+
+            if (parent.x + 1) % mem_column == 0:
+                comp.sb_delay.append(
+                    comp.delays[
+                        f"MEM_{type_}_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
+                    ]
+                )
+            else:
+                comp.sb_delay.append(
+                    comp.delays[f"PE_{type_}_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"]
+                )
 
 def sta(graph):
 
@@ -189,10 +222,7 @@ def sta(graph):
                     if graph.sinks[node][0].input_port_break_path["reg"]:
                         comp = PathComponents()
                 elif node.route_type == RouteType.SB:
-                    calc_sb_delay(graph, node, parent, comp, mem_tile_column)
-                    if graph.sparse:
-                        # Lookback path for ready/valid
-                        calc_sb_delay(graph, node, parent, comp, mem_tile_column)
+                    calc_sb_delay(graph, node, parent, comp, mem_tile_column, graph.sparse)
                 elif node.route_type == RouteType.RMUX:
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1

@@ -93,14 +93,6 @@ def pnr(
     else:
         wave_filename = None
 
-    # if we have fixed
-    if fixed_pos is not None:
-        assert isinstance(fixed_pos, dict)
-        dump_placement_result(fixed_pos, placement_filename, id_to_name)
-        has_fixed = True
-    else:
-        has_fixed = False
-
     if id_to_name is None:
         id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
 
@@ -138,6 +130,17 @@ def pnr(
 
             while pnr_placer_exp <= 30:
                 os.environ["PNR_PLACER_EXP"] = str(pnr_placer_exp)
+
+                if os.path.isfile(placement_filename):
+                    os.remove(placement_filename)
+                
+                if fixed_pos is not None:
+                    assert isinstance(fixed_pos, dict)
+                    dump_placement_result(fixed_pos, placement_filename, id_to_name)
+                    has_fixed = True
+                else:
+                    has_fixed = False
+
                 print(
                     "Trying placement with PnR placer exp:",
                     os.environ["PNR_PLACER_EXP"],
@@ -205,6 +208,17 @@ def pnr(
             pnr_placer_exp = 1
 
             while pnr_placer_exp <= 30:
+                if os.path.isfile(placement_filename):
+                    os.remove(placement_filename)
+                
+                if fixed_pos is not None:
+                    assert isinstance(fixed_pos, dict)
+                    dump_placement_result(fixed_pos, placement_filename, id_to_name)
+                    has_fixed = True
+                else:
+                    has_fixed = False
+
+
                 os.environ["PNR_PLACER_EXP"] = str(pnr_placer_exp)
                 print(
                     "Trying placement with PnR placer exp:",
