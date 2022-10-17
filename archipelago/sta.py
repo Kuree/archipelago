@@ -77,7 +77,9 @@ def calc_sb_delay(graph, node, parent, comp, mem_column):
     # pe_endpoint_sb
 
     if parent.bit_width == 1:
-        return
+        type_ = "B1"
+    else:
+        type_ = "B17"
 
     if parent.io == 0:
         # Its the input to the SB
@@ -124,17 +126,17 @@ def calc_sb_delay(graph, node, parent, comp, mem_column):
             # pe2pe_west_east_input_clk
             comp.sb_clk_delay.append(comp.delays["pe2pe_west_east_input_clk"])
 
-        side_to_dir = {0: "E", 1: "S", 2: "W", 3: "N"}
+        side_to_dir = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
         if (parent.x + 1) % mem_column == 0:
             comp.sb_delay.append(
                 comp.delays[
-                    f"mem{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"
+                    f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                 ]
             )
         else:
             comp.sb_delay.append(
-                comp.delays[f"pe{side_to_dir[parent.side]}2{side_to_dir[next_sb.side]}"]
+                comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
             )
 
 
