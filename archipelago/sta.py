@@ -125,52 +125,38 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
 
         if not sparse:
-            if parent.bit_width == 1:
-                type_ = "B1"
-            else:
-                type_ = "B17"
-
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay.append(
                     comp.delays[
-                        f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                        f"MEM_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                    comp.delays[f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
                 )
         else:
-            if parent.bit_width == 1:
-                type_ = "B1_valid"
-            else:
-                type_ = "B17_valid"
 
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay.append(
                     comp.delays[
-                        f"MEM_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                        f"MEM_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_{type_}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                    comp.delays[f"PE_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
                 )
-
-            if parent.bit_width == 1:
-                type_ = "B1_ready"
-            else:
-                type_ = "B17_ready"
 
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay.append(
                     comp.delays[
-                        f"MEM_{type_}_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
+                        f"MEM_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
                     ]
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_{type_}_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"]
+                    comp.delays[f"PE_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"]
                 )
 
 def sta(graph):
