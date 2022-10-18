@@ -104,6 +104,13 @@ def pnr(
         # 3. Neither is set and we find the first value that routes
 
         if "PNR_PLACER_EXP" in os.environ and os.environ["PNR_PLACER_EXP"].isnumeric():
+            if fixed_pos is not None:
+                assert isinstance(fixed_pos, dict)
+                dump_placement_result(fixed_pos, placement_filename, id_to_name)
+                has_fixed = True
+            else:
+                has_fixed = False
+
             # PNR_PLACER_EXP is set by the user
             print("Using PNR_PLACER_EXP:", os.environ["PNR_PLACER_EXP"])
             pnr_placer_exp_set = True
