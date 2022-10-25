@@ -54,7 +54,9 @@ class PathComponents:
         print("\t\tPEs:", self.pes)
         print("\t\tMems:", self.mems)
         print("\t\tSB delay:", sum(self.sb_delay), "ps")
+        print("\t\tSB delay:", self.sb_delay, "ps")
         print("\t\tSB clk delay:", sum(self.sb_clk_delay), "ps")
+        print("\t\tSB clk delay:", self.sb_clk_delay, "ps")
 
 
 def get_mem_tile_columns(graph):
@@ -189,9 +191,6 @@ def sta(graph):
                     comp.pes += 1
                 elif node.tile_type == TileType.MEM:
                     comp.mems += 1
-                    if parent.route_type == RouteType.PORT:
-                        if node.input_port_break_path[parent.port]:
-                            comp = PathComponents()
                 elif node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1:
                     comp.glbs += 1
             else:

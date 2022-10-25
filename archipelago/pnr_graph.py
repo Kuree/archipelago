@@ -751,7 +751,7 @@ def construct_graph(
                     if "rom_" in id_to_name[tile_id]:
                         tile.input_port_latencies[port] = 1
                         tile.input_port_break_path[port] = True
-                    elif "flush" in port or "input_width_16_num_0" in port or "input_width_16_num_1" in port:
+                    elif "flush" in port:
                         tile.input_port_latencies[port] = 0
                         tile.input_port_break_path[port] = False
                     else:
