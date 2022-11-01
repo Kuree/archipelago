@@ -26,6 +26,7 @@ class PathComponents:
         sb_clk_delay=[],
         pes=0,
         mems=0,
+        rmux=0,
         available_regs=0,
         parent=None,
     ):
@@ -34,6 +35,7 @@ class PathComponents:
         self.sb_clk_delay = sb_clk_delay
         self.pes = pes
         self.mems = mems
+        self.rmux = rmux
         self.available_regs = available_regs
         self.parent = parent
         self.delays = json.load(
@@ -45,6 +47,7 @@ class PathComponents:
         total += self.glbs * self.delays["glb"]
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
+        total += self.rmux * self.delays['rmux']
         total += sum(self.sb_delay)
         total -= sum(self.sb_clk_delay)
         return total
@@ -53,6 +56,7 @@ class PathComponents:
         print("\t\tGlbs:", self.glbs)
         print("\t\tPEs:", self.pes)
         print("\t\tMems:", self.mems)
+        print("\t\tRmux:", self.rmux)
         print("\t\tSB delay:", sum(self.sb_delay), "ps")
         print("\t\tSB delay:", self.sb_delay, "ps")
         print("\t\tSB clk delay:", sum(self.sb_clk_delay), "ps")
@@ -209,6 +213,8 @@ def sta(graph):
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(graph, node, parent, comp, mem_tile_column, graph.sparse)
                 elif node.route_type == RouteType.RMUX:
+                    if (isinstance(parent, RouteNode) and parent.route_type == RouteType.REG):
+                        comp.rmux += 1
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
 
