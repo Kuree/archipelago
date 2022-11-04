@@ -22,6 +22,8 @@ from archipelago.sta import sta, load_graph
 
 def verboseprint(*args, **kwargs):
     print(*args, **kwargs)
+
+
 # verboseprint = lambda *a, **k: None
 
 
@@ -307,13 +309,16 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
                 # Need special case for input IOs
                 c += node.input_port_latencies["output"]
 
-            if isinstance(node, TileNode) and node.tile_type == TileType.PE and sink.port == "PondTop_output_width_17_num_0":
+            if (
+                isinstance(node, TileNode)
+                and node.tile_type == TileType.PE
+                and sink.port == "PondTop_output_width_17_num_0"
+            ):
                 continue
             cycles.add(c)
 
         if None in cycles:
             cycles.remove(None)
-
 
         if len(cycles) > 1:
             verboseprint(
@@ -327,9 +332,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             ]
             max_sink_cycles = max(sink_cycles)
             for sink in graph.sinks[node]:
-                for _ in range(
-                    max_sink_cycles - node_cycles[node.kernel][sink]
-                ):
+                for _ in range(max_sink_cycles - node_cycles[node.kernel][sink]):
                     break_at(
                         graph,
                         node,
@@ -424,7 +427,10 @@ def flush_cycles(
                 flush_cycles[mem] = (mem.y - 1) // pipeline_config_interval
 
         for pe in graph.get_pes():
-            if pes_with_packed_ponds is not None and pe.tile_id in pes_with_packed_ponds:
+            if (
+                pes_with_packed_ponds is not None
+                and pe.tile_id in pes_with_packed_ponds
+            ):
                 pond = pes_with_packed_ponds[pe.tile_id]
                 if pe.y == 0 or pipeline_config_interval == 0:
                     flush_cycles[pond] = 0
@@ -474,7 +480,9 @@ def find_closest_match(kernel_target, candidates):
             return c
 
     kernel_target_in = kernel_target + "_read"
-    kernel_target_in = kernel_target_in.replace("global_wrapper_global_wrapper", "global_wrapper_glb")
+    kernel_target_in = kernel_target_in.replace(
+        "global_wrapper_global_wrapper", "global_wrapper_glb"
+    )
     for c in candidates:
         if kernel_target_in in c:
             return c
@@ -515,13 +523,20 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies):
         if match is not None:
             for kernel_port, d1 in latency_dict.items():
                 for port_num, d2 in d1.items():
-                    if d2['pe_port'] == '' and match in max_latencies:
-                        kernel_latencies[kernel][kernel_port][port_num]["latency"] = max_latencies[match]
+                    if d2["pe_port"] == "" and match in max_latencies:
+                        kernel_latencies[kernel][kernel_port][port_num][
+                            "latency"
+                        ] = max_latencies[match]
                     else:
                         found = False
                         for pe in graph.get_tiles():
-                            if graph.id_to_name[str(pe)] == f'{match}$inner_compute${d2["pe_port"]}':
-                                kernel_latencies[kernel][kernel_port][port_num]["latency"] = node_latencies[match][graph.sources[pe][0]]
+                            if (
+                                graph.id_to_name[str(pe)]
+                                == f'{match}$inner_compute${d2["pe_port"]}'
+                            ):
+                                kernel_latencies[kernel][kernel_port][port_num][
+                                    "latency"
+                                ] = node_latencies[match][graph.sources[pe][0]]
                                 found = True
                                 break
                         if not found:
@@ -539,10 +554,10 @@ def update_kernel_latencies(
     harden_flush,
     pipeline_config_interval,
     pes_with_packed_ponds,
-    sparse
+    sparse,
 ):
     if sparse:
-        return 
+        return
 
     kernel_latencies, node_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing
@@ -664,9 +679,9 @@ def pipeline_pnr(
     harden_flush,
     pipeline_config_interval,
     pes_with_packed_ponds,
-    sparse
+    sparse,
 ):
-    
+
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
@@ -695,7 +710,7 @@ def pipeline_pnr(
         pe_latency=pe_cycles,
         pond_latency=0,
         io_latency=io_cycles,
-        sparse=sparse
+        sparse=sparse,
     )
 
     print("\nApplication Frequency:")
@@ -710,7 +725,7 @@ def pipeline_pnr(
         harden_flush,
         pipeline_config_interval,
         pes_with_packed_ponds,
-        sparse
+        sparse,
     )
 
     if "POST_PNR_ITR" in os.environ:
@@ -735,7 +750,7 @@ def pipeline_pnr(
                     harden_flush,
                     pipeline_config_interval,
                     pes_with_packed_ponds,
-                    sparse
+                    sparse,
                 )
 
                 print("\nIteration", itr + 1, "frequency")
@@ -758,7 +773,7 @@ def pipeline_pnr(
             pe_latency=pe_cycles,
             pond_latency=0,
             io_latency=io_cycles,
-            sparse=sparse
+            sparse=sparse,
         )
         starting_regs = graph.added_regs
 
@@ -771,7 +786,7 @@ def pipeline_pnr(
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
-            sparse
+            sparse,
         )
 
         for _ in range(max_itr):
@@ -787,7 +802,7 @@ def pipeline_pnr(
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
-            sparse
+            sparse,
         )
         print("\nFinal application frequency:")
         curr_freq, crit_path, crit_nets = sta(graph)

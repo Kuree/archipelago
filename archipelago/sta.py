@@ -47,7 +47,7 @@ class PathComponents:
         total += self.glbs * self.delays["glb"]
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
-        total += self.rmux * self.delays['rmux']
+        total += self.rmux * self.delays["rmux"]
         total += sum(self.sb_delay)
         total -= sum(self.sb_clk_delay)
         return total
@@ -82,6 +82,12 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
     # mem_endpoint_sb
     # pe_endpoint_sb
 
+    # if graph.sinks[node][0].route_type == RouteType.PORT:
+    #     if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
+    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
+    #     else:
+    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
+
     if parent.io == 0:
         # Its the input to the SB
         if parent.side == 0:
@@ -96,7 +102,6 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
         else:
             # Coming in from top
             source_x = parent.x
-
         next_sb = node
         if next_sb.route_type != RouteType.SB:
             return
@@ -129,7 +134,6 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
         side_to_dir = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
-
         if not sparse:
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay.append(
@@ -139,7 +143,9 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                    comp.delays[
+                        f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                    ]
                 )
         else:
 
@@ -151,7 +157,9 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"]
+                    comp.delays[
+                        f"PE_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                    ]
                 )
 
             if (parent.x + 1) % mem_column == 0:
@@ -162,8 +170,11 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                 )
             else:
                 comp.sb_delay.append(
-                    comp.delays[f"PE_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"]
+                    comp.delays[
+                        f"PE_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
+                    ]
                 )
+
 
 def sta(graph):
 
@@ -211,9 +222,14 @@ def sta(graph):
                     if graph.sinks[node][0].input_port_break_path["reg"]:
                         comp = PathComponents()
                 elif node.route_type == RouteType.SB:
-                    calc_sb_delay(graph, node, parent, comp, mem_tile_column, graph.sparse)
+                    calc_sb_delay(
+                        graph, node, parent, comp, mem_tile_column, graph.sparse
+                    )
                 elif node.route_type == RouteType.RMUX:
-                    if (isinstance(parent, RouteNode) and parent.route_type == RouteType.REG):
+                    if (
+                        isinstance(parent, RouteNode)
+                        and parent.route_type == RouteType.REG
+                    ):
                         comp.rmux += 1
                     if parent.route_type != RouteType.REG:
                         comp.available_regs += 1
@@ -293,7 +309,7 @@ def parse_args():
     parser.add_argument("-v", "--visualize", action="store_true")
     parser.add_argument("-s", "--sparse", action="store_true")
     args = parser.parse_args()
-    dirname = args.application #os.path.join(args.application, "bin")
+    dirname = args.application  # os.path.join(args.application, "bin")
     netlist = os.path.join(dirname, "design.packed")
     assert os.path.exists(netlist), netlist + " does not exist"
     placement = os.path.join(dirname, "design.place")
@@ -310,7 +326,7 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():    
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
         pe_latency = int(os.environ["PIPELINED"])
     else:
         pe_latency = 1
@@ -319,7 +335,7 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
         io_cycles = 0
     else:
         io_cycles = 1
-        
+
     routing_result_graph = construct_graph(
         placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
@@ -336,7 +352,7 @@ def main():
         routing_file,
         id_to_name_filename,
         visualize,
-        sparse
+        sparse,
     ) = parse_args()
 
     netlist, buses = pythunder.io.load_netlist(packed_file)
@@ -349,10 +365,10 @@ def main():
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
 
-    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():    
+    if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
         pe_latency = int(os.environ["PIPELINED"])
     else:
-        pe_latency = 1 
+        pe_latency = 1
 
     if "IO_DELAY" in os.environ and os.environ["IO_DELAY"] == "0":
         io_cycles = 0
