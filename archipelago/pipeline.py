@@ -515,6 +515,8 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies):
             ):
                 max_latencies[node16] -= max_latencies[node1]
                 max_latencies[node1] = 0
+                assert max_latencies[node16] >= 0, f"{node16} latency is negative"
+
 
     for kernel, latency_dict in kernel_latencies.items():
         if "_glb_" in kernel:
