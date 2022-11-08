@@ -613,9 +613,15 @@ class RoutingResultGraph:
                 else:
                     unsolved_regs.append((node, regs))
 
+        seen_regs = set()
+
         while len(unsolved_regs) > 0:
             resolved = False
             (node, regs) = unsolved_regs.pop(0)
+            if node in seen_regs:
+                print(f"Couldn't associate {node} with {regs} in placement file")
+                return
+            seen_regs.add(node)
 
             prev_tile_found = False
             prev_node = node
@@ -636,6 +642,7 @@ class RoutingResultGraph:
                                 node.kernel = self.id_to_name[node.tile_id].split(
                                     "$"
                                 )[0]
+                                seen_regs = set()
             if not resolved:
                 unsolved_regs.append((node, regs))
 
