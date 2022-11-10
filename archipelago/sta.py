@@ -219,8 +219,8 @@ def sta(graph):
                 elif node.route_type == RouteType.REG and isinstance(
                     graph.sinks[node][0], TileNode
                 ):
-                    if graph.sinks[node][0].input_port_break_path["reg"]:
-                        comp = PathComponents()
+                    # if graph.sinks[node][0].input_port_break_path["reg"]:
+                    comp = PathComponents()
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(
                         graph, node, parent, comp, mem_tile_column, graph.sparse
