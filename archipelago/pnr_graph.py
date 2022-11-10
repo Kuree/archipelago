@@ -828,7 +828,6 @@ def construct_graph(
     while graph.fix_cycles():
         pass
 
-    graph.print_graph("/aha/pointwise2")
     return graph
 
 
