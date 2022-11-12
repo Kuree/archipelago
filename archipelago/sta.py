@@ -82,11 +82,11 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
     # mem_endpoint_sb
     # pe_endpoint_sb
 
-    # if graph.sinks[node][0].route_type == RouteType.PORT:
-    #     if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
-    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
-    #     else:
-    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
+     if graph.sinks[node][0].route_type == RouteType.PORT:
+         if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
+             comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
+         else:
+             comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
 
     if parent.io == 0:
         # Its the input to the SB
