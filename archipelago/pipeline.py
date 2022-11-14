@@ -54,7 +54,8 @@ def find_break_idx(graph, crit_path):
     if graph.sparse:
         for idx, node in enumerate(crit_path[:-4]):
             if (
-                node[0].route_type == RouteType.SB
+                isinstance(crit_path[idx][0], RouteNode)
+                and crit_path[idx][0].route_type == RouteType.SB
                 and isinstance(crit_path[idx + 1][0], RouteNode)
                 and crit_path[idx + 1][0].route_type == RouteType.RMUX
                 and isinstance(crit_path[idx + 2][0], RouteNode)
