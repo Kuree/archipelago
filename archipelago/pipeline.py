@@ -239,6 +239,19 @@ def break_at(graph, node1, id_to_name, placement, routing):
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 
+def break_at_mems(graph, id_to_name, placement, routes):
+    for mem in graph.get_mems():
+        for port in graph.sinks[mem]:
+            for sb_port in graph.sinks[port]:
+                rmux = graph.sinks[sb_port][0]
+                assert isinstance(rmux, RouteNode)
+                assert rmux.route_type == RouteType.RMUX, str(rmux)
+                crit_path = [(sb_port, 0), (rmux, 1)]
+                break_crit_path(graph, id_to_name, crit_path, placement, routes)
+                reg = graph.sinks[graph.sinks[sb_port][0]][0]
+                reg.input_port_latencies["reg"] = 0
+                reg.input_port_break_path["reg"] = True      
+
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
     kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
     for node in kernel_output_nodes:
@@ -725,6 +738,8 @@ def pipeline_pnr(
         sparse=sparse,
     )
 
+    break_at_mems(graph, id_to_name, placement, routing)
+
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 
@@ -787,6 +802,9 @@ def pipeline_pnr(
             io_latency=io_cycles,
             sparse=sparse,
         )
+        
+        break_at_mems(graph, id_to_name, placement, routing)
+
         starting_regs = graph.added_regs
 
         update_kernel_latencies(
