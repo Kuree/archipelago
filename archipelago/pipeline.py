@@ -71,7 +71,8 @@ def find_break_idx(graph, crit_path):
     else:
         for idx, node in enumerate(crit_path[:-1]):
             if (
-                node[0].route_type == RouteType.SB
+                isinstance(crit_path[idx][0], RouteNode)
+                and crit_path[idx][0].route_type == RouteType.SB
                 and isinstance(crit_path[idx + 1][0], RouteNode)
                 and crit_path[idx + 1][0].route_type == RouteType.RMUX
             ):
@@ -239,7 +240,9 @@ def break_at(graph, node1, id_to_name, placement, routing):
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 
-def break_at_mems(graph, id_to_name, placement, routes):
+def break_at_mems(graph, id_to_name, placement, routes, sparse):
+    if sparse:
+        return
     for mem in graph.get_mems():
         for port in graph.sinks[mem]:
             for sb_port in graph.sinks[port]:
@@ -250,7 +253,8 @@ def break_at_mems(graph, id_to_name, placement, routes):
                 break_crit_path(graph, id_to_name, crit_path, placement, routes)
                 reg = graph.sinks[graph.sinks[sb_port][0]][0]
                 reg.input_port_latencies["reg"] = 0
-                reg.input_port_break_path["reg"] = True      
+                reg.input_port_break_path["reg"] = True
+
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
     kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
@@ -738,7 +742,7 @@ def pipeline_pnr(
         sparse=sparse,
     )
 
-    break_at_mems(graph, id_to_name, placement, routing)
+    break_at_mems(graph, id_to_name, placement, routing, sparse)
 
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -802,8 +806,8 @@ def pipeline_pnr(
             io_latency=io_cycles,
             sparse=sparse,
         )
-        
-        break_at_mems(graph, id_to_name, placement, routing)
+
+        break_at_mems(graph, id_to_name, placement, routing, sparse)
 
         starting_regs = graph.added_regs
 
