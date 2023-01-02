@@ -71,7 +71,8 @@ def find_break_idx(graph, crit_path):
     else:
         for idx, node in enumerate(crit_path[:-1]):
             if (
-                node[0].route_type == RouteType.SB
+                isinstance(crit_path[idx][0], RouteNode)
+                and crit_path[idx][0].route_type == RouteType.SB
                 and isinstance(crit_path[idx + 1][0], RouteNode)
                 and crit_path[idx + 1][0].route_type == RouteType.RMUX
             ):
