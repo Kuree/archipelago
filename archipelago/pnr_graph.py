@@ -517,7 +517,7 @@ class RoutingResultGraph:
             return self.tile_id_to_tile[node.tile_id]
         return node
 
-    def gen_placement(self, placement, netlist):
+    def gen_placement(self, placement, netlist, pes_with_packed_ponds):
         for blk_id, place in placement.items():
             if place not in self.placement:
                 self.placement[place] = []
@@ -525,14 +525,26 @@ class RoutingResultGraph:
 
         for net_id, conns in netlist.items():
             for conn in conns:
-                if conn[0] not in self.id_to_ports:
-                    self.id_to_ports[conn[0]] = []
-                self.id_to_ports[conn[0]].append(conn[1])
+                if (
+                    pes_with_packed_ponds is not None
+                    and conn[0] in pes_with_packed_ponds
+                    and "PondTop" in conn[1]
+                ):
+                    new_conn = pes_with_packed_ponds[conn[0]]
+                else:
+                    new_conn = conn[0]
 
-    def get_tile_at(self, x, y, port):
+                if new_conn not in self.id_to_ports:
+                    self.id_to_ports[new_conn] = []
+                self.id_to_ports[new_conn].append(conn[1])
+
+    def get_tile_at(self, x, y, port, pes_with_packed_ponds):
         tiles = self.placement[(x, y)]
 
         for tile in tiles:
+            if pes_with_packed_ponds is not None and tile in pes_with_packed_ponds:
+                if port in self.id_to_ports[pes_with_packed_ponds[tile]]:
+                    return pes_with_packed_ponds[tile]
             if port in self.id_to_ports[tile]:
                 return tile
 
@@ -704,6 +716,18 @@ class RoutingResultGraph:
                         visited.add(node)
         return kernel_output_nodes
 
+    def print_graph(self, filename, edge_weights=False):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{node}\n{node.kernel}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
 
 def construct_graph(
     placement,
@@ -714,11 +738,12 @@ def construct_graph(
     pond_latency=0,
     io_latency=0,
     sparse=False,
+    pes_with_packed_ponds=None,
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
     graph.sparse = sparse
-    graph.gen_placement(placement, netlist)
+    graph.gen_placement(placement, netlist, pes_with_packed_ponds)
 
     max_reg_id = 0
 
@@ -730,6 +755,12 @@ def construct_graph(
                 kernel = None
             node = TileNode(place[0], place[1], tile_id=blk_id, kernel=kernel)
             graph.add_node(node)
+
+            if pes_with_packed_ponds is not None and blk_id in pes_with_packed_ponds:
+                pond_id = pes_with_packed_ponds[blk_id]
+                node = TileNode(place[0], place[1], tile_id=pond_id, kernel=kernel)
+                graph.add_node(node)
+
         max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
 
@@ -743,7 +774,9 @@ def construct_graph(
                 graph.add_edge(node1, node2)
 
                 if node1.route_type == RouteType.PORT:
-                    tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
+                    tile_id = graph.get_tile_at(
+                        node1.x, node1.y, node1.port, pes_with_packed_ponds
+                    )
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
                     reg_tile = graph.get_or_create_reg_at(
@@ -756,7 +789,9 @@ def construct_graph(
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
-                    tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
+                    tile_id = graph.get_tile_at(
+                        node2.x, node2.y, node2.port, pes_with_packed_ponds
+                    )
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
                     reg_tile = graph.get_or_create_reg_at(
@@ -778,9 +813,18 @@ def construct_graph(
     id_to_input_ports = {}
     for net_id, conns in netlist.items():
         for conn in conns[1:]:
-            if conn[0] not in id_to_input_ports:
-                id_to_input_ports[conn[0]] = []
-            id_to_input_ports[conn[0]].append(conn[1])
+            if (
+                pes_with_packed_ponds is not None
+                and conn[0] in pes_with_packed_ponds
+                and "PondTop" in conn[1]
+            ):
+                new_conn = pes_with_packed_ponds[conn[0]]
+            else:
+                new_conn = conn[0]
+
+            if new_conn not in id_to_input_ports:
+                id_to_input_ports[new_conn] = []
+            id_to_input_ports[new_conn].append(conn[1])
 
     for tile in graph.get_tiles():
         tile_id = tile.tile_id

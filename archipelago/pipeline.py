@@ -222,13 +222,13 @@ def break_at(graph, node1, id_to_name, placement, routing):
             break
         path.append((curr_node, idx))
         curr_node = graph.sources[curr_node][0]
-        if curr_node in graph.get_ponds():
-            break
+        # if curr_node in graph.get_ponds():
+        #     break
 
-    if curr_node in graph.get_ponds():
-        verboseprint("\t\tFound pond for branch delay matching", curr_node)
-        curr_node.input_port_latencies["data_in_pond"] += 1
-        return
+    # if curr_node in graph.get_ponds():
+    #     verboseprint("\t\tFound pond for branch delay matching", curr_node)
+    #     curr_node.input_port_latencies["data_in_pond"] += 1
+    #     return
 
     if len(path) == 0:
         raise ValueError(f"Cant break at node: {node1}")
@@ -245,44 +245,6 @@ def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routi
     for node in kernel_output_nodes:
         for _ in range(added_delay):
             break_at(graph, node, id_to_name, placement, routing)
-
-
-def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
-    nodes = graph.topological_sort()
-    node_cycles = {}
-
-    for node in nodes:
-        cycles = set()
-
-        if len(graph.sources[node]) == 0:
-            if node in graph.get_pes():
-                cycles = {None}
-            else:
-                cycles = {0}
-
-        for parent in graph.sources[node]:
-            if parent not in node_cycles:
-                c = 0
-            else:
-                c = node_cycles[parent]
-
-            if c != None and len(graph.sinks[node]) > 0 and isinstance(node, TileNode):
-                c += node.input_port_latencies[parent.port]
-
-            # Flush signals shouldn't be considered here
-            if "reset" not in node.kernel:
-                cycles.add(c)
-
-        if None in cycles:
-            cycles.remove(None)
-
-        if len(graph.sources[node]) > 1 and len(cycles) > 1:
-            verboseprint(f"Incorrect node delay: {node} {cycles}")
-
-        if len(cycles) > 0:
-            node_cycles[node] = max(cycles)
-        else:
-            node_cycles[node] = None
 
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
@@ -312,7 +274,16 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             if c != None and isinstance(node, TileNode):
                 c += node.input_port_latencies[parent.port]
 
-            cycles.add(c)
+            if not (
+                isinstance(node, TileNode)
+                and node.tile_type == TileType.PE
+                and parent in graph.sources
+                and len(graph.sources[parent]) == 1
+                and isinstance(graph.sources[parent][0], RouteNode)
+                and graph.sources[parent][0].route_type == RouteType.PORT
+                and "PondTop" in graph.sources[parent][0].port
+            ):
+                cycles.add(c)
 
         if None in cycles:
             cycles.remove(None)
@@ -579,8 +550,6 @@ def update_kernel_latencies(
 
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
-    branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
-
     flush_latencies, max_flush_cycles = flush_cycles(
         graph, id_to_name, harden_flush, pipeline_config_interval, pes_with_packed_ponds
     )
@@ -724,8 +693,10 @@ def pipeline_pnr(
         pond_latency=0,
         io_latency=io_cycles,
         sparse=sparse,
+        pes_with_packed_ponds=pes_with_packed_ponds,
     )
 
+    graph.print_graph("/aha/resnet-g")
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 
@@ -787,6 +758,7 @@ def pipeline_pnr(
             pond_latency=0,
             io_latency=io_cycles,
             sparse=sparse,
+            pes_with_packed_ponds=pes_with_packed_ponds,
         )
         starting_regs = graph.added_regs
 
