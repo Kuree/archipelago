@@ -696,7 +696,6 @@ def pipeline_pnr(
         pes_with_packed_ponds=pes_with_packed_ponds,
     )
 
-    graph.print_graph("/aha/resnet-g")
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 

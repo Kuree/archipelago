@@ -716,18 +716,6 @@ class RoutingResultGraph:
                         visited.add(node)
         return kernel_output_nodes
 
-    def print_graph(self, filename, edge_weights=False):
-        from graphviz import Digraph
-
-        g = Digraph()
-        for node in self.nodes:
-            g.node(str(node), label=f"{node}\n{node.kernel}")
-
-        for edge in self.edges:
-            g.edge(str(edge[0]), str(edge[1]))
-
-        g.render(filename=filename)
-
 
 def construct_graph(
     placement,
