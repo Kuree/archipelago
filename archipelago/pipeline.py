@@ -573,6 +573,30 @@ def calculate_latencies(kernel_graph, kernel_latencies):
     return kernel_latencies
 
 
+def update_mem_delays(kernel_graph):
+    compute_kernels_add_latency = set()
+
+    for node in kernel_graph.nodes:
+        if (node.kernel_type == KernelNodeType.MEM and node.kernel[0] == "m"):
+            visiting = kernel_graph.sinks[node]
+
+            while len(visiting) != 0:
+                curr_node = visiting.pop()
+                # print(curr_node, curr_node.kernel_type)
+                if curr_node.kernel_type == KernelNodeType.COMPUTE and curr_node.kernel[0:2] == "op":
+                    compute_kernels_add_latency.add(curr_node)
+                else: #curr_node.kernel_type != KernelNodeType.MEM:
+                    visiting += kernel_graph.sinks[curr_node]
+
+            # for sink in kernel_graph.sinks[node]:
+            #     if sink.kernel_type != KernelNodeType.COMPUTE:
+            #         breakpoint()
+            #     compute_kernels_add_latency.add(sink)
+
+    for node in compute_kernels_add_latency:
+        print(node.kernel)
+        node.latency += 1
+
 def update_kernel_latencies(
     dir_name,
     graph,
@@ -592,6 +616,10 @@ def update_kernel_latencies(
     )
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
+
+    kernel_graph.print_graph("/aha/kernel_graph")
+    update_mem_delays(kernel_graph)
+    kernel_graph.print_graph("/aha/kernel_graph_updated")
 
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 

@@ -946,6 +946,17 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
+    def print_graph(self, filename):
+        from graphviz import Digraph
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)} {node.latency}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
 
 def construct_kernel_graph(graph, new_latencies):
     kernel_graph = KernelGraph()
