@@ -538,14 +538,22 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                 graph.id_to_name[str(pe)]
                                 == f'{match}$inner_compute${d2["pe_port"][0]}'
                             ):
+                                found_port = False
                                 for source in graph.sources[pe]:
-                                    port = port_remap_r[source.port]
-                                    if port == d2["pe_port"][1]:
-                                        kernel_latencies[kernel][kernel_port][port_num][
-                                            "latency"
-                                        ] = node_latencies[match][source]
-                                        found = True
-                                        break
+                                    if source.port in port_remap_r:
+                                        port = port_remap_r[source.port]
+                                        if port == d2["pe_port"][1]:
+                                            kernel_latencies[kernel][kernel_port][port_num][
+                                                "latency"
+                                            ] = node_latencies[match][source]
+                                            found = True
+                                            found_port = True
+                                            break
+                                if not found_port:
+                                    kernel_latencies[kernel][kernel_port][port_num][
+                                        "latency"
+                                    ] = node_latencies[match][graph.sources[pe][0]]
+                                        
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
 
