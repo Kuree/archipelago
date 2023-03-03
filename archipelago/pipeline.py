@@ -496,7 +496,9 @@ def find_closest_match(kernel_target, candidates):
     print("No match for", kernel_target)
 
 
-def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies):
+def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, port_remap):
+
+    port_remap_r = {v:k for k,v in port_remap.items()}
 
     nodes = kernel_graph.topological_sort()
     max_latencies = {}
@@ -534,13 +536,16 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies):
                         for pe in graph.get_tiles():
                             if (
                                 graph.id_to_name[str(pe)]
-                                == f'{match}$inner_compute${d2["pe_port"]}'
+                                == f'{match}$inner_compute${d2["pe_port"][0]}'
                             ):
-                                kernel_latencies[kernel][kernel_port][port_num][
-                                    "latency"
-                                ] = node_latencies[match][graph.sources[pe][0]]
-                                found = True
-                                break
+                                for source in graph.sources[pe]:
+                                    port = port_remap_r[source.port]
+                                    if port == d2["pe_port"][1]:
+                                        kernel_latencies[kernel][kernel_port][port_num][
+                                            "latency"
+                                        ] = node_latencies[match][source]
+                                        found = True
+                                        break
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
 
@@ -594,8 +599,10 @@ def update_kernel_latencies(
     f = open(kernel_latencies_file, "r")
     existing_kernel_latencies = json.load(f)
 
+    port_remap = json.load(open(f"{dir_name}/design.port_remap"))
+
     matched_kernel_latencies = calculate_latencies(
-        graph, kernel_graph, node_latencies, existing_kernel_latencies
+        graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
     )
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
