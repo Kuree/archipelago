@@ -256,6 +256,7 @@ def break_at_mems(graph, id_to_name, placement, routes, sparse):
                 reg.input_port_break_path["reg"] = True
 
 
+
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
     kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
     for node in kernel_output_nodes:
@@ -555,7 +556,7 @@ def calculate_latencies(kernel_graph, kernel_latencies):
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
-                new_latencies[node16] -= new_latencies[node1]
+                new_latencies[node16] -= new_latencies[node1] + 1
                 new_latencies[node1] = 0
 
     # Unfortunately exact matches between kernels and memories dont exist, so we have to look them up
@@ -617,9 +618,7 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    kernel_graph.print_graph("/aha/kernel_graph")
-    update_mem_delays(kernel_graph)
-    kernel_graph.print_graph("/aha/kernel_graph_updated")
+    #update_mem_delays(kernel_graph)
 
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
 
