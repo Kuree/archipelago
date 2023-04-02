@@ -550,6 +550,7 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                             found_port = True
                                             break
                                 if not found_port:
+                                    found = True
                                     kernel_latencies[kernel][kernel_port][port_num][
                                         "latency"
                                     ] = node_latencies[match][graph.sources[pe][0]]

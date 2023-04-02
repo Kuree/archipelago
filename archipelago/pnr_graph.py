@@ -587,6 +587,34 @@ class RoutingResultGraph:
             assert node.kernel is not None, node
 
     def fix_regs(self, netlist):
+        for tile in self.get_tiles():
+            if tile.tile_type == TileType.REG:
+                if len(self.sinks[tile]) == 0:
+                    # If one isn't hooked up correctly we need to fix it
+                    # Pretty hacky but works
+                    source = self.sources[tile][0]
+                    source_copy = RouteNode(
+                        source.x,
+                        source.y,
+                        route_type=RouteType.REG,
+                        track=source.track,
+                        bit_width=source.bit_width,
+                        net_id=source.net_id,
+                        reg_name=source.reg_name,
+                        port="reg",
+                        kernel=source.kernel,
+                    )
+
+                    source_copy.reg = True
+                    source_copy.update_tile_id()
+                    self.add_node(source_copy)
+                    self.add_edge(tile, source_copy)
+
+                    for source_sink in self.sinks[source]:
+                        if source_sink != tile:
+                            self.remove_edge((source, source_sink))
+                            self.add_edge(source_copy, source_sink)
+
         # Routing result doesn't have reg name information
         # Need to get that from the netlist
         unsolved_regs = []
@@ -639,9 +667,9 @@ class RoutingResultGraph:
                             if id_[0] in regs:
                                 resolved = True
                                 node.tile_id = id_[0]
-                                node.kernel = self.id_to_name[node.tile_id].split(
-                                    "$"
-                                )[0]
+                                node.kernel = self.id_to_name[node.tile_id].split("$")[
+                                    0
+                                ]
                                 seen_regs = set()
             if not resolved:
                 unsolved_regs.append((node, regs))
