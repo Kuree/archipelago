@@ -456,7 +456,7 @@ class RoutingResultGraph:
         for node in self.inputs:
             if node not in visited:
                 break_edge = self.is_cyclic_util(node, visited, rec_stack)
-                if break_edge is not None:
+                if break_edge is not None and isinstance(break_edge[1], TileNode) and break_edge[1].tile_type != TileType.PE:
                     self.remove_edge(break_edge)
                     return True
         return False
