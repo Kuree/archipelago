@@ -434,30 +434,36 @@ class RoutingResultGraph:
         if node1 in self.sinks[node0]:
             self.sinks[node0].remove(node1)
 
-    def is_cyclic_util(self, v, visited, rec_stack):
+    def is_cyclic_util(self, v, visited, rec_stack, only_break_mems):
         visited.append(v)
         rec_stack.append(v)
 
         for neighbour in self.sinks[v]:
             if neighbour not in visited:
-                retval = self.is_cyclic_util(neighbour, visited, rec_stack)
+                retval = self.is_cyclic_util(neighbour, visited, rec_stack, only_break_mems)
                 if retval != None:
                     return retval
             elif neighbour in rec_stack:
-                return (v, neighbour)
+                if only_break_mems:
+                    if isinstance(neighbour, TileNode) and neighbour.tile_type != TileType.PE:
+                        return (v, neighbour)
+                else:
+                    if isinstance(neighbour, TileNode):
+                        return (v, neighbour)
 
         rec_stack.remove(v)
         return None
 
-    def fix_cycles(self):
+    def fix_cycles(self, only_break_mems=False):
         sys.setrecursionlimit(10**6)
         visited = []
         rec_stack = []
         for node in self.inputs:
             if node not in visited:
-                break_edge = self.is_cyclic_util(node, visited, rec_stack)
-                if break_edge is not None and isinstance(break_edge[1], TileNode) and break_edge[1].tile_type != TileType.PE:
+                break_edge = self.is_cyclic_util(node, visited, rec_stack, only_break_mems)
+                if break_edge is not None:
                     self.remove_edge(break_edge)
+                    print("removing edge", break_edge)
                     return True
         return False
 
@@ -704,7 +710,6 @@ class RoutingResultGraph:
                         visited.add(node)
         return kernel_output_nodes
 
-
 def construct_graph(
     placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0, sparse=False
 ):
@@ -763,7 +768,10 @@ def construct_graph(
 
     graph.update_sources_and_sinks()
 
-    while graph.fix_cycles():
+    while graph.fix_cycles(True):
+        pass
+
+    while graph.fix_cycles(False):
         pass
 
     graph.fix_regs(netlist)
@@ -818,7 +826,10 @@ def construct_graph(
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
 
-    while graph.fix_cycles():
+    while graph.fix_cycles(True):
+        pass
+
+    while graph.fix_cycles(False):
         pass
 
     return graph
