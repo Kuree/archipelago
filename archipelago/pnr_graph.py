@@ -372,16 +372,21 @@ class RoutingResultGraph:
         assert node1 in self.nodes, f"{node1} not in nodes"
         assert node2 in self.nodes, f"{node2} not in nodes"
 
-        assert isinstance(node1, RouteNode) or isinstance(node1, TileNode)
-        assert isinstance(node2, RouteNode) or isinstance(node2, TileNode)
+        assert isinstance(node1, KernelNode)
+        assert isinstance(node2, KernelNode)
 
-        self.edges.append((node1, node2))
+        if (node1, node2) not in self.edges:
+            self.edges.append((node1, node2))
 
         if node2 not in self.sources:
-            self.sources[node2] = [node1]
+            self.sources[node2] = []
+        if node1 not in self.sources[node2]:
+            self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
-            self.sinks[node1] = [node2]
+            self.sinks[node1] = []
+        if node2 not in self.sinks[node1]:
+            self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = []
@@ -907,15 +912,18 @@ class KernelGraph:
         assert isinstance(node1, KernelNode)
         assert isinstance(node2, KernelNode)
 
-        self.edges.append((node1, node2))
+        if (node1, node2) not in self.edges:
+            self.edges.append((node1, node2))
 
         if node2 not in self.sources:
             self.sources[node2] = []
-        self.sources[node2].append(node1)
+        if node1 not in self.sources[node2]:
+            self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
             self.sinks[node1] = []
-        self.sinks[node1].append(node2)
+        if node2 not in self.sinks[node1]:
+            self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = []
