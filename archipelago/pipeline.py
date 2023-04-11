@@ -17,7 +17,7 @@ from archipelago.pnr_graph import (
     TileNode,
     RouteNode,
 )
-from archipelago.sta import sta, load_graph
+from archipelago.sta import sta, load_graph, visualize_pnr
 
 
 def verboseprint(*args, **kwargs):
@@ -239,20 +239,44 @@ def break_at(graph, node1, id_to_name, placement, routing):
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 
+def break_at_mem_node(graph, id_to_name, placement, routes, node):
+    found = False
+    curr_node = node
+    while len(graph.sinks[curr_node]) == 1 and not found:
+        next_node = graph.sinks[curr_node][0]
+
+        if (
+            isinstance(curr_node, RouteNode)
+            and curr_node.route_type == RouteType.SB
+            and isinstance(next_node, RouteNode)
+            and next_node.route_type == RouteType.RMUX
+        ):
+            crit_path = [(curr_node, 0), (next_node, 1)]
+            break_crit_path(graph, id_to_name, crit_path, placement, routes)
+            reg = graph.sinks[graph.sinks[curr_node][0]][0]
+            reg.input_port_latencies["reg"] = 0
+            reg.input_port_break_path["reg"] = True
+            found = True
+
+        curr_node = next_node
+
+    if not found:
+        found = True
+        for sink in graph.sinks[curr_node]:
+            found = found & break_at_mem_node(
+                graph, id_to_name, placement, routes, sink
+            )
+
+    return found
+
+
 def break_at_mems(graph, id_to_name, placement, routes, sparse):
     if sparse:
         return
     for mem in graph.get_mems():
         for port in graph.sinks[mem]:
-            for sb_port in graph.sinks[port]:
-                rmux = graph.sinks[sb_port][0]
-                assert isinstance(rmux, RouteNode)
-                assert rmux.route_type == RouteType.RMUX, str(rmux)
-                crit_path = [(sb_port, 0), (rmux, 1)]
-                break_crit_path(graph, id_to_name, crit_path, placement, routes)
-                reg = graph.sinks[graph.sinks[sb_port][0]][0]
-                reg.input_port_latencies["reg"] = 0
-                reg.input_port_break_path["reg"] = True
+            found = break_at_mem_node(graph, id_to_name, placement, routes, port)
+            assert found, f"Couldn't insert register at output port {port} of {mem}"
 
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
@@ -306,7 +330,6 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     node_cycles = {}
 
     for node in nodes:
-
         if node.kernel not in node_cycles:
             node_cycles[node.kernel] = {}
 
@@ -513,9 +536,10 @@ def find_closest_match(kernel_target, candidates):
     print("No match for", kernel_target)
 
 
-def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, port_remap):
-
-    port_remap_r = {v:k for k,v in port_remap.items()}
+def calculate_latencies(
+    graph, kernel_graph, node_latencies, kernel_latencies, port_remap
+):
+    port_remap_r = {v: k for k, v in port_remap.items()}
 
     nodes = kernel_graph.topological_sort()
     max_latencies = {}
@@ -532,10 +556,9 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
-                max_latencies[node16] -= max_latencies[node1]
+                max_latencies[node16] -= max_latencies[node1] + 1
                 max_latencies[node1] = 0
                 assert max_latencies[node16] >= 0, f"{node16} latency is negative"
-
 
     for kernel, latency_dict in kernel_latencies.items():
         if "_glb_" in kernel:
@@ -560,9 +583,9 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                     if source.port in port_remap_r:
                                         port = port_remap_r[source.port]
                                         if port == d2["pe_port"][1]:
-                                            kernel_latencies[kernel][kernel_port][port_num][
-                                                "latency"
-                                            ] = node_latencies[match][source]
+                                            kernel_latencies[kernel][kernel_port][
+                                                port_num
+                                            ]["latency"] = node_latencies[match][source]
                                             found = True
                                             found_port = True
                                             break
@@ -571,7 +594,7 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                     kernel_latencies[kernel][kernel_port][port_num][
                                         "latency"
                                     ] = node_latencies[match][graph.sources[pe][0]]
-                                        
+
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
 
@@ -716,7 +739,6 @@ def pipeline_pnr(
     pes_with_packed_ponds,
     sparse,
 ):
-
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
@@ -859,6 +881,8 @@ def pipeline_pnr(
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
+
+    graph.print_graph("/aha/cascade")
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)

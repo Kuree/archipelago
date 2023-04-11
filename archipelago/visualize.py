@@ -696,6 +696,8 @@ def draw_used_tiles(draw, graph):
     tiles = graph.get_tiles()
     blk_id_list = {tile.tile_id: tile for tile in tiles}
     for blk_id, node in blk_id_list.items():
+        if 'r' in blk_id:
+            continue
         create_tile(
             draw=draw, x=node.x, y=node.y, tile_type=node.tile_type, tile_id=blk_id
         )

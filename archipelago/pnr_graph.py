@@ -28,7 +28,6 @@ class RouteNode:
         reg=False,
         kernel=None,
     ):
-
         assert x is not None
         self.x = x
         assert y is not None
@@ -110,7 +109,6 @@ class TileType(Enum):
 
 class TileNode:
     def __init__(self, x, y, tile_id, kernel):
-
         self.x = x
         self.y = y
 
@@ -145,9 +143,7 @@ class RoutingResultGraph:
     def __init__(self):
         self.nodes: List[Union[RouteNode, TileNode]] = []
         self.tile_id_to_tile: Dict[str, Union[RouteNode, TileNode]] = {}
-        self.edges: List[
-            (Union[RouteNode, TileNode], Union[RouteNode, TileNode])
-        ] = []
+        self.edges: List[(Union[RouteNode, TileNode], Union[RouteNode, TileNode])] = []
         self.edge_weights: Dict[
             (Union[RouteNode, TileNode], Union[RouteNode, TileNode]), int
         ] = {}
@@ -375,7 +371,8 @@ class RoutingResultGraph:
         assert isinstance(node1, RouteNode) or isinstance(node1, TileNode)
         assert isinstance(node2, RouteNode) or isinstance(node2, TileNode)
 
-        self.edges.append((node1, node2))
+        if (node1, node2) not in self.edges:
+            self.edges.append((node1, node2))
 
         if node2 not in self.sources:
             self.sources[node2] = [node1]
@@ -440,12 +437,17 @@ class RoutingResultGraph:
 
         for neighbour in self.sinks[v]:
             if neighbour not in visited:
-                retval = self.is_cyclic_util(neighbour, visited, rec_stack, only_break_mems)
+                retval = self.is_cyclic_util(
+                    neighbour, visited, rec_stack, only_break_mems
+                )
                 if retval != None:
                     return retval
             elif neighbour in rec_stack:
                 if only_break_mems:
-                    if isinstance(neighbour, TileNode) and neighbour.tile_type != TileType.PE:
+                    if (
+                        isinstance(neighbour, TileNode)
+                        and neighbour.tile_type != TileType.PE
+                    ):
                         return (v, neighbour)
                 else:
                     if isinstance(neighbour, TileNode):
@@ -460,7 +462,9 @@ class RoutingResultGraph:
         rec_stack = []
         for node in self.inputs:
             if node not in visited:
-                break_edge = self.is_cyclic_util(node, visited, rec_stack, only_break_mems)
+                break_edge = self.is_cyclic_util(
+                    node, visited, rec_stack, only_break_mems
+                )
                 if break_edge is not None:
                     self.remove_edge(break_edge)
                     print("removing edge", break_edge)
@@ -710,8 +714,28 @@ class RoutingResultGraph:
                         visited.append(node)
         return kernel_output_nodes
 
+    def print_graph(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
+
 def construct_graph(
-    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0, sparse=False
+    placement,
+    routes,
+    id_to_name,
+    netlist,
+    pe_latency=0,
+    pond_latency=0,
+    io_latency=0,
+    sparse=False,
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
@@ -907,15 +931,19 @@ class KernelGraph:
         assert isinstance(node1, KernelNode)
         assert isinstance(node2, KernelNode)
 
-        self.edges.append((node1, node2))
+        if (node1, node2) not in self.edges:
+            self.edges.append((node1, node2))
 
         if node2 not in self.sources:
             self.sources[node2] = []
-        self.sources[node2].append(node1)
+        if node1 not in self.sources[node2]:
+            self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
             self.sinks[node1] = []
-        self.sinks[node1].append(node2)
+
+        if node2 not in self.sinks[node1]:
+            self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = []
@@ -925,9 +953,9 @@ class KernelGraph:
             self.sinks[node] = []
         for node in self.nodes:
             for source, sink in self.edges:
-                if node == source:
+                if node == source and source not in self.sources[sink]:
                     self.sources[sink].append(source)
-                elif node == sink:
+                elif node == sink and sink not in self.sinks[source]:
                     self.sinks[source].append(sink)
         for node in self.nodes:
             if len(self.sources[node]) == 0:

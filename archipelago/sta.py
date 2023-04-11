@@ -148,7 +148,6 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                     ]
                 )
         else:
-
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay.append(
                     comp.delays[
@@ -177,7 +176,6 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
 
 def sta(graph):
-
     mem_tile_column = get_mem_tile_columns(graph)
     nodes = graph.topological_sort()
     timing_info = {}
@@ -259,7 +257,7 @@ def sta(graph):
     clock_speed = int(1.0e12 / max_delay / 1e6)
 
     print("\tMaximum clock frequency:", clock_speed, "MHz")
-    print("\tCritical Path:", max_delay, "ps")
+    print("\tCritical Path:", int(max_delay), "ps")
     print("\tCritical Path Info:")
     timing_info[max_node].print()
 
@@ -321,7 +319,6 @@ def parse_args():
 
 
 def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
-
     netlist, buses = pythunder.io.load_netlist(packed_file)
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)
