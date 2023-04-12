@@ -372,8 +372,8 @@ class RoutingResultGraph:
         assert node1 in self.nodes, f"{node1} not in nodes"
         assert node2 in self.nodes, f"{node2} not in nodes"
 
-        assert isinstance(node1, KernelNode)
-        assert isinstance(node2, KernelNode)
+        assert isinstance(node1, TileNode) or isinstance(node1, RouteNode)
+        assert isinstance(node2, TileNode) or isinstance(node2, RouteNode)
 
         if (node1, node2) not in self.edges:
             self.edges.append((node1, node2))
