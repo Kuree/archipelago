@@ -239,6 +239,53 @@ def break_at(graph, node1, id_to_name, placement, routing):
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 
+def exhaustive_pipe(graph, id_to_name, placement, routing):
+    for node in graph.nodes:
+        if node in graph.get_tiles() or len(graph.sinks[node]) > 1:
+            for sink in graph.sinks[node]:
+                path = []
+                curr_node = sink
+                while True:
+                    path.append((curr_node, len(path)))
+                    if len(graph.sinks[curr_node]) != 1:
+                        break
+                    curr_node = graph.sinks[curr_node][0]
+                
+                for idx in range(len(path)):
+                    if graph.sparse:
+                        if idx + 4 >= len(path):
+                            break
+                        if (
+                            isinstance(path[idx][0], RouteNode)
+                            and path[idx][0].route_type == RouteType.SB
+                            and path[idx + 1][0].route_type == RouteType.RMUX
+                            and isinstance(path[idx + 2][0], RouteNode)
+                            and path[idx + 2][0].route_type == RouteType.SB
+                            and isinstance(path[idx + 3][0], RouteNode)
+                            and path[idx + 3][0].route_type == RouteType.SB
+                            and isinstance(path[idx + 4][0], RouteNode)
+                            and path[idx + 4][0].route_type == RouteType.RMUX
+                        ):
+                            try:
+                                break_crit_path(graph, id_to_name, path[idx:idx+5], placement, routing)
+                            except:
+                                print("Skip")
+                    else:
+                        if idx + 1 >= len(path):
+                            break
+                        if (
+                            isinstance(path[idx][0], RouteNode)
+                            and path[idx][0].route_type == RouteType.SB
+                            and isinstance(path[idx + 1][0], RouteNode)
+                            and path[idx + 1][0].route_type == RouteType.RMUX
+                        ):
+                            try:
+                                break_crit_path(graph, id_to_name, path[idx:idx+2], placement, routing)
+                            except:
+                                print("Skip")
+
+                
+
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
     kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
     for node in kernel_output_nodes:
@@ -831,6 +878,13 @@ def pipeline_pnr(
         else:
             print(bcolors.OKGREEN + "\nBroke", max_itr, "critical paths" + bcolors.ENDC)
 
+        print(
+            "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
+        )
+    elif "EXHAUSTIVE_PIPE" in os.environ:
+        starting_regs = graph.added_regs
+        exhaustive_pipe(graph, id_to_name, placement, routing)
+        curr_freq, crit_path, crit_nets = sta(graph)
         print(
             "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
         )

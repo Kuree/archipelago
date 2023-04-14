@@ -173,6 +173,20 @@ def pnr(
                     routed = False
 
                 if routed:
+                    placement_result = pycyclone.io.load_placement(placement_filename)
+                    routing_result = load_routing_result(route_filename)
+                    placement_result, routing_result, id_to_name = pipeline_pnr(
+                        cwd,
+                        placement_result,
+                        routing_result,
+                        id_to_name,
+                        input_netlist[0],
+                        load_only,
+                        harden_flush,
+                        pipeline_config_interval,
+                        pes_with_packed_ponds,
+                        sparse
+                    )    
                     freq = run_sta(
                         packed_file, placement_filename, route_filename, id_to_name, sparse
                     )
