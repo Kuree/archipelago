@@ -596,14 +596,15 @@ class RoutingResultGraph:
             node.update_tile_id()
             assert node.kernel is not None, node
 
+
     def fix_regs(self, netlist):
         for tile in self.get_tiles():
             if tile.tile_type == TileType.REG:
-                if len(self.sinks[tile]) == 0:
+                if self.sinks[tile][0] == self.sources[tile][0]:
                     # If one isn't hooked up correctly we need to fix it
                     # Pretty hacky but works
                     source = self.sources[tile][0]
-                    source_copy = RouteNode(
+                    new_sink = RouteNode(
                         source.x,
                         source.y,
                         route_type=RouteType.REG,
@@ -615,16 +616,19 @@ class RoutingResultGraph:
                         kernel=source.kernel,
                     )
 
-                    source_copy.reg = True
-                    source_copy.update_tile_id()
-                    self.add_node(source_copy)
-                    self.add_edge(tile, source_copy)
-
+                    new_sink.reg = True
+                    new_sink.update_tile_id()
+                    self.add_node(new_sink)
+                    self.add_edge(tile, new_sink)
+                    self.remove_edge((tile, source))
                     for source_sink in self.sinks[source]:
                         if source_sink != tile:
                             self.remove_edge((source, source_sink))
-                            self.add_edge(source_copy, source_sink)
+                            self.add_edge(new_sink, source_sink)
 
+                    
+
+        self.update_sources_and_sinks()
         # Routing result doesn't have reg name information
         # Need to get that from the netlist
         unsolved_regs = []
@@ -664,7 +668,7 @@ class RoutingResultGraph:
             prev_tile_found = False
             prev_node = node
             while not prev_tile_found:
-                assert len(self.sources[prev_node]) == 1
+                assert len(self.sources[prev_node]) == 1, self.sources[prev_node]
                 prev_node = self.sources[prev_node][0]
 
                 if isinstance(prev_node, TileNode):
@@ -797,6 +801,9 @@ def construct_graph(
 
     while graph.fix_cycles(False):
         pass
+
+
+    graph.print_graph("/aha/debug_fix_regs0")
 
     graph.fix_regs(netlist)
 
@@ -978,6 +985,17 @@ class KernelGraph:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
 
+    def print_graph(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
 
 def construct_kernel_graph(graph, new_latencies):
     kernel_graph = KernelGraph()

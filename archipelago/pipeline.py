@@ -429,15 +429,15 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
 
         if len(kernel_graph.sources[node]) > 1 and len(cycles) > 1:
             verboseprint(f"\tIncorrect kernel delay: {node} {cycles}")
+            source_cycles = []
+            for source in kernel_graph.sources[node]:
+                if source in node_cycles and node_cycles[source] != None:
+                    source_cycles.append(node_cycles[source])
 
-            source_cycles = [
-                node_cycles[source]
-                for source in kernel_graph.sources[node]
-                if node_cycles[source] != None
-            ]
             max_cycle = max(source_cycles)
             for source in kernel_graph.sources[node]:
-                if node_cycles[source] != None and node_cycles[source] != max_cycle:
+                if False:
+                #if source in node_cycles and node_cycles[source] != None and node_cycles[source] != max_cycle:
                     verboseprint(
                         f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}"
                     )
@@ -775,6 +775,7 @@ def pipeline_pnr(
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 
+    graph.print_graph("/aha/debug_fix_regs")
     update_kernel_latencies(
         app_dir,
         graph,
