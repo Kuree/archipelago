@@ -368,17 +368,21 @@ class RoutingResultGraph:
         assert node1 in self.nodes, f"{node1} not in nodes"
         assert node2 in self.nodes, f"{node2} not in nodes"
 
-        assert isinstance(node1, RouteNode) or isinstance(node1, TileNode)
-        assert isinstance(node2, RouteNode) or isinstance(node2, TileNode)
+        assert isinstance(node1, TileNode) or isinstance(node1, RouteNode)
+        assert isinstance(node2, TileNode) or isinstance(node2, RouteNode)
 
         if (node1, node2) not in self.edges:
             self.edges.append((node1, node2))
 
         if node2 not in self.sources:
-            self.sources[node2] = [node1]
+            self.sources[node2] = []
+        if node1 not in self.sources[node2]:
+            self.sources[node2].append(node1)
 
         if node1 not in self.sinks:
-            self.sinks[node1] = [node2]
+            self.sinks[node1] = []
+        if node2 not in self.sinks[node1]:
+            self.sinks[node1].append(node2)
 
     def update_sources_and_sinks(self):
         self.inputs = []
@@ -431,7 +435,7 @@ class RoutingResultGraph:
         if node1 in self.sinks[node0]:
             self.sinks[node0].remove(node1)
 
-    def is_cyclic_util(self, v, visited, rec_stack, only_break_mems):
+    def is_cyclic_util(self, v, visited, rec_stack):
         visited.append(v)
         rec_stack.append(v)
 
@@ -441,6 +445,10 @@ class RoutingResultGraph:
                     neighbour, visited, rec_stack, only_break_mems
                 )
                 if retval != None:
+                    if sink in retval:
+                        retval.append("cyclefinished")
+                    if "cyclefinished" not in retval:
+                        retval.append(sink)
                     return retval
             elif neighbour in rec_stack:
                 if only_break_mems:
@@ -456,7 +464,7 @@ class RoutingResultGraph:
         rec_stack.remove(v)
         return None
 
-    def fix_cycles(self, only_break_mems=False):
+    def fix_cycles(self):
         sys.setrecursionlimit(10**6)
         visited = []
         rec_stack = []
@@ -718,18 +726,6 @@ class RoutingResultGraph:
                         visited.append(node)
         return kernel_output_nodes
 
-    def print_graph(self, filename):
-        from graphviz import Digraph
-
-        g = Digraph()
-        for node in self.nodes:
-            g.node(str(node), label=f"{str(node)}")
-
-        for edge in self.edges:
-            g.edge(str(edge[0]), str(edge[1]))
-
-        g.render(filename=filename)
-
 
 def construct_graph(
     placement,
@@ -796,10 +792,7 @@ def construct_graph(
 
     graph.update_sources_and_sinks()
 
-    while graph.fix_cycles(True):
-        pass
-
-    while graph.fix_cycles(False):
+    while graph.fix_cycles():
         pass
 
 
@@ -857,10 +850,7 @@ def construct_graph(
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
 
-    while graph.fix_cycles(True):
-        pass
-
-    while graph.fix_cycles(False):
+    while graph.fix_cycles():
         pass
 
     return graph
@@ -948,7 +938,6 @@ class KernelGraph:
 
         if node1 not in self.sinks:
             self.sinks[node1] = []
-
         if node2 not in self.sinks[node1]:
             self.sinks[node1].append(node2)
 
