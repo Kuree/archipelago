@@ -439,27 +439,18 @@ class RoutingResultGraph:
         visited.append(v)
         rec_stack.append(v)
 
-        for neighbour in self.sinks[v]:
-            if neighbour not in visited:
-                retval = self.is_cyclic_util(
-                    neighbour, visited, rec_stack, only_break_mems
-                )
+        for sink in self.sinks[v]:
+            if sink not in visited:
+                retval = self.is_cyclic_util(sink, visited, rec_stack)
+
                 if retval != None:
                     if sink in retval:
                         retval.append("cyclefinished")
                     if "cyclefinished" not in retval:
                         retval.append(sink)
                     return retval
-            elif neighbour in rec_stack:
-                if only_break_mems:
-                    if (
-                        isinstance(neighbour, TileNode)
-                        and neighbour.tile_type != TileType.PE
-                    ):
-                        return (v, neighbour)
-                else:
-                    if isinstance(neighbour, TileNode):
-                        return (v, neighbour)
+            elif sink in rec_stack:
+                return [sink]
 
         rec_stack.remove(v)
         return None
@@ -470,12 +461,17 @@ class RoutingResultGraph:
         rec_stack = []
         for node in self.inputs:
             if node not in visited:
-                break_edge = self.is_cyclic_util(
-                    node, visited, rec_stack, only_break_mems
-                )
-                if break_edge is not None:
-                    self.remove_edge(break_edge)
-                    print("removing edge", break_edge)
+                cycle = self.is_cyclic_util(node, visited, rec_stack)
+                if cycle is not None:
+                    removed = False
+                    for idx, n in enumerate(cycle):
+                        if isinstance(n, TileNode) and n.tile_type == TileType.MEM:
+                            self.remove_edge((cycle[idx + 1], n))
+                            print("removing edge", str(cycle[idx + 1]), str(n))
+                            removed = True
+                    if not removed:
+                        self.remove_edge((cycle[1], cycle[0]))
+                        print("removing edge", str(cycle[1]), str(cycle[0]))
                     return True
         return False
 
@@ -604,11 +600,10 @@ class RoutingResultGraph:
             node.update_tile_id()
             assert node.kernel is not None, node
 
-
     def fix_regs(self, netlist):
         for tile in self.get_tiles():
             if tile.tile_type == TileType.REG:
-                if self.sinks[tile][0] == self.sources[tile][0]:
+                if len(self.sinks[tile]) == 0:
                     # If one isn't hooked up correctly we need to fix it
                     # Pretty hacky but works
                     source = self.sources[tile][0]
@@ -633,8 +628,6 @@ class RoutingResultGraph:
                         if source_sink != tile:
                             self.remove_edge((source, source_sink))
                             self.add_edge(new_sink, source_sink)
-
-                    
 
         self.update_sources_and_sinks()
         # Routing result doesn't have reg name information
@@ -726,6 +719,18 @@ class RoutingResultGraph:
                         visited.append(node)
         return kernel_output_nodes
 
+    def print_graph(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
 
 def construct_graph(
     placement,
@@ -794,9 +799,6 @@ def construct_graph(
 
     while graph.fix_cycles():
         pass
-
-
-    graph.print_graph("/aha/debug_fix_regs0")
 
     graph.fix_regs(netlist)
 
@@ -986,6 +988,7 @@ class KernelGraph:
 
         g.render(filename=filename)
 
+
 def construct_kernel_graph(graph, new_latencies):
     kernel_graph = KernelGraph()
 
@@ -1060,3 +1063,16 @@ def construct_kernel_graph(graph, new_latencies):
     kernel_graph.update_sources_and_sinks()
 
     return kernel_graph
+
+
+import sys
+import os
+from typing import Dict, List, List, Union
+from enum import Enum
+
+
+class RouteType(Enum):
+    SB = 1
+    RMUX = 2
+    PORT = 3
+    REG = 4

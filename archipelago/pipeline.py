@@ -270,11 +270,15 @@ def break_at_mem_node(graph, id_to_name, placement, routes, node):
     return found
 
 
-def break_at_mems(graph, id_to_name, placement, routes, sparse):
+def break_at_mems(graph, id_to_name, placement, routes, sparse, chained_mems):
     if sparse:
         return
     for mem in graph.get_mems():
         for port in graph.sinks[mem]:
+            if str(mem) in chained_mems and port.port == chained_mems[str(mem)]:
+                print(mem, port.port, "is used in chain mode, skipping mem register")
+                continue
+
             found = break_at_mem_node(graph, id_to_name, placement, routes, port)
             assert found, f"Couldn't insert register at output port {port} of {mem}"
 
@@ -437,7 +441,7 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
             max_cycle = max(source_cycles)
             for source in kernel_graph.sources[node]:
                 if False:
-                #if source in node_cycles and node_cycles[source] != None and node_cycles[source] != max_cycle:
+                    # if source in node_cycles and node_cycles[source] != None and node_cycles[source] != max_cycle:
                     verboseprint(
                         f"\tFixing kernel delays at: {source} {max_cycle - node_cycles[source]}"
                     )
@@ -611,6 +615,7 @@ def update_kernel_latencies(
     pipeline_config_interval,
     pes_with_packed_ponds,
     sparse,
+    port_remap_json,
 ):
     if sparse:
         return
@@ -648,7 +653,7 @@ def update_kernel_latencies(
     f = open(kernel_latencies_file, "r")
     existing_kernel_latencies = json.load(f)
 
-    port_remap = json.load(open(f"{dir_name}/design.port_remap"))
+    port_remap = port_remap_json["pe"]
 
     matched_kernel_latencies = calculate_latencies(
         graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
@@ -671,6 +676,53 @@ def update_kernel_latencies(
 
     fout = open(pond_latencies_file, "w")
     fout.write(json.dumps(pond_latencies, indent=4))
+
+
+def get_chained_mems(port_remap_json, app_dir, graph):
+    chain_input_ports = []
+    for k, v in port_remap_json["mem"]["UB"].items():
+        if "chain" in k:
+            chain_input_ports.append(v)
+
+    netlist_info_fname = os.path.join(app_dir, f"netlist_info.txt")
+
+    id_to_metadata = False
+
+    chained_mems = []
+    netlist_lines = open(netlist_info_fname, "r").readlines()
+
+    for line in netlist_lines:
+        if id_to_metadata:
+            mem_id = line.strip().split(",")[0]
+            if "chain" in line:
+                skip = False
+                for port in graph.sources[graph.tile_id_to_tile[mem_id]]:
+                    if port.port in chain_input_ports:
+                        skip = True
+                if not skip:
+                    chained_mems.append(mem_id)
+        if "id_to_metadata" in line:
+            id_to_metadata = True
+
+    chained_mem_ports = {}
+    netlist = False
+    packed_fname = os.path.join(app_dir, f"design.packed")
+    for line in open(packed_fname, "r").readlines():
+        if netlist:
+            if "(" not in line:
+                continue
+
+            parsed_line = re.findall(r"\(([^,]+), ([^)]+)", line)
+
+            if parsed_line[0][0] in chained_mems:
+                if "m" in parsed_line[1][0]:
+                    chained_mem_ports[parsed_line[0][0]] = parsed_line[0][1]
+        if "Netlists:" in line:
+            netlist = True
+        elif "ID to Names:" in line:
+            netlist = False
+
+    return chained_mem_ports
 
 
 def segment_node_to_string(node):
@@ -745,6 +797,8 @@ def pipeline_pnr(
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
 
+    port_remap_json = json.load(open(f"{app_dir}/design.port_remap"))
+
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)
@@ -770,12 +824,13 @@ def pipeline_pnr(
         sparse=sparse,
     )
 
-    break_at_mems(graph, id_to_name, placement, routing, sparse)
+    chained_mems = get_chained_mems(port_remap_json, app_dir, graph)
+
+    break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
 
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 
-    graph.print_graph("/aha/debug_fix_regs")
     update_kernel_latencies(
         app_dir,
         graph,
@@ -786,6 +841,7 @@ def pipeline_pnr(
         pipeline_config_interval,
         pes_with_packed_ponds,
         sparse,
+        port_remap_json,
     )
 
     if "POST_PNR_ITR" in os.environ:
@@ -811,6 +867,7 @@ def pipeline_pnr(
                     pipeline_config_interval,
                     pes_with_packed_ponds,
                     sparse,
+                    port_remap_json,
                 )
 
                 print("\nIteration", itr + 1, "frequency")
@@ -836,7 +893,7 @@ def pipeline_pnr(
             sparse=sparse,
         )
 
-        break_at_mems(graph, id_to_name, placement, routing, sparse)
+        break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
 
         starting_regs = graph.added_regs
 
@@ -850,6 +907,7 @@ def pipeline_pnr(
             pipeline_config_interval,
             pes_with_packed_ponds,
             sparse,
+            port_remap_json,
         )
 
         for _ in range(max_itr):
@@ -866,6 +924,7 @@ def pipeline_pnr(
             pipeline_config_interval,
             pes_with_packed_ponds,
             sparse,
+            port_remap_json,
         )
         print("\nFinal application frequency:")
         curr_freq, crit_path, crit_nets = sta(graph)
@@ -882,8 +941,6 @@ def pipeline_pnr(
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
-
-    graph.print_graph("/aha/cascade")
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)

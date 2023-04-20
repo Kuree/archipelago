@@ -167,12 +167,6 @@ def pnr(
                         wave_info=wave_filename,
                         shift_registers=shift_registers,
                     )
-                    routed = True
-                except:
-                    print("Unable to route with PNR_PLACER_EXP:", pnr_placer_exp)
-                    routed = False
-
-                if routed:
                     placement_result = pycyclone.io.load_placement(placement_filename)
                     routing_result = load_routing_result(route_filename)
                     placement_result, routing_result, id_to_name = pipeline_pnr(
@@ -187,7 +181,13 @@ def pnr(
                         pes_with_packed_ponds,
                         sparse
                     )
+                    routed = True
+                except:
+                    print("Unable to route with PNR_PLACER_EXP:", pnr_placer_exp)
+                    routed = False
 
+                if routed:
+                    
                     freq = run_sta(
                         packed_file, placement_filename, route_filename, id_to_name, sparse
                     )
