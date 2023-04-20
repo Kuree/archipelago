@@ -23,6 +23,7 @@ class PathComponents:
         self,
         glbs=0,
         sb_delay=[],
+        sb_delay_rv=[],
         sb_clk_delay=[],
         pes=0,
         mems=0,
@@ -32,6 +33,7 @@ class PathComponents:
     ):
         self.glbs = glbs
         self.sb_delay = sb_delay
+        self.sb_delay_rv = sb_delay_rv
         self.sb_clk_delay = sb_clk_delay
         self.pes = pes
         self.mems = mems
@@ -48,7 +50,7 @@ class PathComponents:
         total += self.pes * self.delays["pe"]
         total += self.mems * self.delays["mem"]
         total += self.rmux * self.delays["rmux"]
-        total += sum(self.sb_delay)
+        total += max(sum(self.sb_delay), sum(self.sb_delay_rv))
         total -= sum(self.sb_clk_delay)
         return total
 
@@ -59,6 +61,8 @@ class PathComponents:
         print("\t\tRmux:", self.rmux)
         print("\t\tSB delay:", sum(self.sb_delay), "ps")
         print("\t\tSB delay:", self.sb_delay, "ps")
+        print("\t\tSB delay ready-valid:", sum(self.sb_delay_rv), "ps")
+        print("\t\tSB delay ready-valid:", self.sb_delay_rv, "ps")
         print("\t\tSB clk delay:", sum(self.sb_clk_delay), "ps")
         print("\t\tSB clk delay:", self.sb_clk_delay, "ps")
 
@@ -82,11 +86,20 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
     # mem_endpoint_sb
     # pe_endpoint_sb
 
-    # if graph.sinks[node][0].route_type == RouteType.PORT:
-    #     if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
-    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
-    #     else:
-    #         comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
+    if sparse:
+        if graph.sinks[node][0].route_type == RouteType.PORT:
+            if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM_fifo"])
+                comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_MEM_fifo_valid"])
+            else:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_PE_fifo"])
+                comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_PE_fifo_valid"])
+    else:
+        if graph.sinks[node][0].route_type == RouteType.PORT:
+            if graph.sinks[graph.sinks[node][0]][0].tile_type == TileType.MEM:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
+            else:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
 
     if parent.io == 0:
         # Its the input to the SB
@@ -134,46 +147,84 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
         side_to_dir = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
-        if not sparse:
-            if (parent.x + 1) % mem_column == 0:
-                comp.sb_delay.append(
-                    comp.delays[
-                        f"MEM_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
-                    ]
-                )
-            else:
-                comp.sb_delay.append(
-                    comp.delays[
-                        f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
-                    ]
-                )
+        if (parent.x + 1) % mem_column == 0:
+            comp.sb_delay.append(
+                comp.delays[
+                    f"MEM_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                ]
+            )
         else:
-
+            comp.sb_delay.append(
+                comp.delays[
+                    f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
+                ]
+            )
+        
+        if sparse:
             if (parent.x + 1) % mem_column == 0:
-                comp.sb_delay.append(
+                comp.sb_delay_rv.append(
                     comp.delays[
                         f"MEM_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
             else:
-                comp.sb_delay.append(
+                comp.sb_delay_rv.append(
                     comp.delays[
                         f"PE_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
 
             if (parent.x + 1) % mem_column == 0:
-                comp.sb_delay.append(
+                comp.sb_delay_rv.append(
                     comp.delays[
                         f"MEM_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
                     ]
                 )
             else:
-                comp.sb_delay.append(
+                comp.sb_delay_rv.append(
                     comp.delays[
                         f"PE_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
                     ]
                 )
+
+
+def calc_fifo_to_out(graph, node, parent, comp, mem_tile_column):
+    assert graph.sparse
+
+    if (node.x + 1) % mem_tile_column == 0:
+        tile_suffix = "mem"
+    else:
+        tile_suffix = "pe"
+
+    if (
+        isinstance(parent, RouteNode)
+        and parent.route_type == RouteType.REG
+    ):
+        # Split fifo to SB out
+        prefix = "split"
+    else:
+        # Sparse prim fifo to SB out
+        prefix = "prim"
+
+    comp.sb_delay.append(
+        comp.delays[
+            f"{prefix}_fifo_to_sb_out_{tile_suffix}"
+        ]
+    )
+
+    comp.sb_delay_rv.append(
+        comp.delays[
+            f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"
+        ]
+    )
+
+    # Ready and-ing logic to produce valid
+    if not (isinstance(graph.sources[parent][0], RouteNode) and graph.sources[parent][0].route_type == RouteType.SB):
+        comp.sb_delay_rv.append(
+            comp.delays[
+                f"ready_and_valid_{tile_suffix}"
+            ]
+        )
 
 
 def sta(graph):
@@ -211,28 +262,35 @@ def sta(graph):
             else:
                 if len(graph.sinks[node]) == 0:
                     continue
+
                 if node.route_type == RouteType.PORT and isinstance(
                     graph.sinks[node][0], TileNode
                 ):
                     if graph.sinks[node][0].input_port_break_path[node.port]:
                         comp = PathComponents()
+
                 elif node.route_type == RouteType.REG and isinstance(
                     graph.sinks[node][0], TileNode
                 ):
                     if graph.sinks[node][0].input_port_break_path["reg"]:
                         comp = PathComponents()
+
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(
                         graph, node, parent, comp, mem_tile_column, graph.sparse
                     )
+
                 elif node.route_type == RouteType.RMUX:
-                    if (
-                        isinstance(parent, RouteNode)
-                        and parent.route_type == RouteType.REG
-                    ):
-                        comp.rmux += 1
-                    if parent.route_type != RouteType.REG:
-                        comp.available_regs += 1
+                    if graph.sparse:
+                        calc_fifo_to_out(graph, node, parent, comp, mem_tile_column)
+                    else:
+                        if (
+                            isinstance(parent, RouteNode)
+                            and parent.route_type == RouteType.REG
+                        ):
+                            comp.rmux += 1
+                        if parent.route_type != RouteType.REG:
+                            comp.available_regs += 1
 
             components.append(comp)
 
