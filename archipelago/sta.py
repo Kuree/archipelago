@@ -191,35 +191,35 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 def calc_fifo_to_out(graph, node, parent, comp, mem_tile_column):
     assert graph.sparse
 
-    if (node.x + 1) % mem_tile_column == 0:
-        tile_suffix = "mem"
-    else:
-        tile_suffix = "pe"
-
-    if (
-        isinstance(parent, RouteNode)
-        and parent.route_type == RouteType.REG
-    ):
-        # Split fifo to SB out
-        prefix = "split"
-    else:
-        # Sparse prim fifo to SB out
-        prefix = "prim"
-
-    comp.sb_delay.append(
-        comp.delays[
-            f"{prefix}_fifo_to_sb_out_{tile_suffix}"
-        ]
-    )
-
-    comp.sb_delay_rv.append(
-        comp.delays[
-            f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"
-        ]
-    )
-
-    # Ready and-ing logic to produce valid
     if not (isinstance(graph.sources[parent][0], RouteNode) and graph.sources[parent][0].route_type == RouteType.SB):
+        if (node.x + 1) % mem_tile_column == 0:
+            tile_suffix = "mem"
+        else:
+            tile_suffix = "pe"
+
+        if (
+            isinstance(parent, RouteNode)
+            and parent.route_type == RouteType.REG
+        ):
+            # Split fifo to SB out
+            prefix = "split"
+        else:
+            # Sparse prim fifo to SB out
+            prefix = "prim"
+
+        comp.sb_delay.append(
+            comp.delays[
+                f"{prefix}_fifo_to_sb_out_{tile_suffix}"
+            ]
+        )
+
+        comp.sb_delay_rv.append(
+            comp.delays[
+                f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"
+            ]
+        )
+
+        # Ready and-ing logic to produce valid
         comp.sb_delay_rv.append(
             comp.delays[
                 f"ready_and_valid_{tile_suffix}"
