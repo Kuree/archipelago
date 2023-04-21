@@ -45,13 +45,20 @@ class PathComponents:
         )
 
     def get_total(self):
-        total = 0
-        total += self.glbs * self.delays["glb"]
-        total += self.pes * self.delays["pe"]
-        total += self.mems * self.delays["mem"]
-        total += self.rmux * self.delays["rmux"]
-        total += max(sum(self.sb_delay), sum(self.sb_delay_rv))
-        total -= sum(self.sb_clk_delay)
+        if sum(self.sb_delay) > sum(self.sb_delay_rv):
+            total = 0
+            total += self.glbs * self.delays["glb"]
+            total += self.pes * self.delays["pe"]
+            total += self.mems * self.delays["mem"]
+            total += self.rmux * self.delays["rmux"]
+            total += sum(self.sb_delay)
+            total -= sum(self.sb_clk_delay)
+        else:
+            total = 0
+            total += self.glbs * self.delays["glb"]
+            total += self.rmux * self.delays["rmux"]
+            total += sum(self.sb_delay_rv)
+            total -= sum(self.sb_clk_delay)
         return total
 
     def print(self):

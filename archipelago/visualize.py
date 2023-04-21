@@ -468,9 +468,9 @@ def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
             + tile_x * GLOBAL_TILE_WIDTH
             + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
         )
-        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH
+        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH/7)
     elif "EAST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - (GLOBAL_TILE_WIDTH/7)
         y = (
             GLOBAL_OFFSET_Y
             + GLOBAL_TILE_MARGIN
@@ -484,9 +484,9 @@ def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
             + tile_x * GLOBAL_TILE_WIDTH
             + (track_id + 1) * GLOBAL_ARROW_DISTANCE
         )
-        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH
+        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - (GLOBAL_TILE_WIDTH/7)
     elif "WEST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH
+        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH/7)
         y = (
             GLOBAL_OFFSET_Y
             + GLOBAL_TILE_MARGIN
@@ -494,7 +494,7 @@ def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
             + (track_id + 1) * GLOBAL_ARROW_DISTANCE
         )
 
-    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 20
+    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 25
     xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
     draw.polygon(xy=xy, fill="Red", outline="Black", width=1)
 
