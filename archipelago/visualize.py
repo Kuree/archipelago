@@ -803,7 +803,6 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
     array_width += 1
     array_height += 1
 
-    st = time.time()
     # process tile history
     tiles = routing_result_graph.get_tiles()
     blk_id_list = {tile.tile_id: tile for tile in tiles}
@@ -822,8 +821,6 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
 
     template = create_tile_types(count)
 
-    ed = time.time()
-    print("t pre: ", ed-st)
 
     for width, graph in routing_graphs.items():
         # initialize image
@@ -833,31 +830,15 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
         draw = ImageDraw.Draw(img)
         
         # draw all the tiles
-        st = time.time()
         draw_all_tiles(draw, img, graph)
-        ed = time.time()
-        print("t A: ", ed-st)
 
-        st = time.time()
         draw_used_tiles(draw, img, tile_history, count, template)
-        ed = time.time()
-        print("t B: ", ed-st)
 
-        st = time.time()
         draw_used_routes(draw, routing_result_graph, width)
-        ed = time.time()
-        print("t C: ", ed-st)
 
         if crit_nodes is not None:
-            st = time.time()
             draw_crit_routes(draw, routing_result_graph, width, crit_nodes)
-            ed = time.time()
-            print("t D: ", ed-st) 
 
-        st = time.time()
         label_used_tiles(draw, img, tile_history, count, template)
-        ed = time.time()
-        print("t E: ", ed-st)
 
-        print("end================")
         img.save(f"{app_dir}/pnr_result_{width}.png", format="PNG")
