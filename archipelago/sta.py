@@ -298,6 +298,9 @@ def sta(graph):
                             comp.rmux += 1
                         if parent.route_type != RouteType.REG:
                             comp.available_regs += 1
+                elif node.route_type == RouteType.PORT and isinstance(parent, TileNode) and parent.tile_type == TileType.IO16:
+                    comp.sb_delay_rv.append(300)
+                    comp.sb_delay_rv.append(635)
 
             components.append(comp)
 
@@ -327,6 +330,11 @@ def sta(graph):
     print("\tCritical Path:", max_delay, "ps")
     print("\tCritical Path Info:")
     timing_info[max_node].print()
+
+    # for n,v in node_to_timing.items():
+    #     print(str(n),v)
+    #     timing_info[n].print()
+        
 
     max_node = list(node_to_timing.keys())[0]
     curr_node = max_node
