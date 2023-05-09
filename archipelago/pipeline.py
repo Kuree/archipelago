@@ -560,10 +560,10 @@ def calculate_latencies(
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
-                max_latencies[node16] -= max_latencies[node1] + 1
+                max_latencies[node16] -= max_latencies[node1]
                 max_latencies[node1] = 0
                 assert max_latencies[node16] >= 0, f"{node16} latency is negative"
-
+    
     for kernel, latency_dict in kernel_latencies.items():
         if "_glb_" in kernel:
             continue
@@ -579,6 +579,7 @@ def calculate_latencies(
                         found = False
                         for pe in graph.get_tiles():
                             if (
+                                d2["pe_port"] != "" and
                                 graph.id_to_name[str(pe)]
                                 == f'{match}$inner_compute${d2["pe_port"][0]}'
                             ):
@@ -640,6 +641,7 @@ def update_kernel_latencies(
                 node.latency >= 0
             ), f"{node.kernel} has negative compute kernel latency"
 
+
     kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
     flush_latencies_file = kernel_latencies_file.replace(
         "compute_kernel_latencies", "flush_latencies"
@@ -653,7 +655,7 @@ def update_kernel_latencies(
     f = open(kernel_latencies_file, "r")
     existing_kernel_latencies = json.load(f)
 
-    port_remap = port_remap_json["pe"]
+    port_remap = port_remap_json
 
     matched_kernel_latencies = calculate_latencies(
         graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
@@ -734,7 +736,6 @@ def segment_node_to_string(node):
         return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]}, {node[5]})"
     elif node[0] == "RMUX":
         return f"{node[0]} {node[1]} ({node[2]}, {node[3]}, {node[4]})"
-
 
 def dump_routing_result(dir_name, routing):
     route_name = os.path.join(dir_name, "design.route")
@@ -824,9 +825,9 @@ def pipeline_pnr(
         sparse=sparse,
     )
 
-    chained_mems = get_chained_mems(port_remap_json, app_dir, graph)
+    # chained_mems = get_chained_mems(port_remap_json, app_dir, graph)
 
-    break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
+    # break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
 
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -893,7 +894,7 @@ def pipeline_pnr(
             sparse=sparse,
         )
 
-        break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
+        # break_at_mems(graph, id_to_name, placement, routing, sparse, chained_mems)
 
         starting_regs = graph.added_regs
 
@@ -941,6 +942,7 @@ def pipeline_pnr(
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")
     fout.write(f"{curr_freq}\n")
+
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)
