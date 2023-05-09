@@ -148,55 +148,55 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
 
-    # if graph.sparse:
-    #     break_idx += 3
-    #     break_node_source = crit_path[break_idx][0]
-    #     break_node_dest = graph.sinks[break_node_source][0]
+    if graph.sparse:
+        break_idx += 3
+        break_node_source = crit_path[break_idx][0]
+        break_node_dest = graph.sinks[break_node_source][0]
 
-    #     assert isinstance(break_node_source, RouteNode)
-    #     assert break_node_source.route_type == RouteType.SB
-    #     assert isinstance(break_node_dest, RouteNode)
-    #     assert break_node_dest.route_type == RouteType.RMUX
+        assert isinstance(break_node_source, RouteNode)
+        assert break_node_source.route_type == RouteType.SB
+        assert isinstance(break_node_dest, RouteNode)
+        assert break_node_dest.route_type == RouteType.RMUX
 
-    #     x = break_node_source.x
-    #     y = break_node_source.y
-    #     track = break_node_source.track
-    #     bw = break_node_source.bit_width
-    #     net_id = break_node_source.net_id
-    #     kernel = break_node_source.kernel
-    #     side = break_node_source.side
-    #     print("\nBreaking net:", net_id, "Kernel:", kernel)
+        x = break_node_source.x
+        y = break_node_source.y
+        track = break_node_source.track
+        bw = break_node_source.bit_width
+        net_id = break_node_source.net_id
+        kernel = break_node_source.kernel
+        side = break_node_source.side
+        print("\nBreaking net:", net_id, "Kernel:", kernel)
 
-    #     dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
+        dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
-    #     new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
-    #     new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
-    #     new_reg_route_source.reg = True
-    #     new_reg_route_source.update_tile_id()
-    #     new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
-    #     new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
+        new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
+        new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
+        new_reg_route_source.reg = True
+        new_reg_route_source.update_tile_id()
+        new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
+        new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
 
-    #     new_reg_tile.input_port_latencies["reg"] = 1
-    #     new_reg_tile.input_port_break_path["reg"] = True
+        new_reg_tile.input_port_latencies["reg"] = 1
+        new_reg_tile.input_port_break_path["reg"] = True
 
-    #     graph.added_regs += 1
+        graph.added_regs += 1
 
-    #     graph.edges.remove((break_node_source, break_node_dest))
-    #     graph.add_node(new_reg_route_source)
-    #     graph.add_node(new_reg_tile)
-    #     graph.add_node(new_reg_route_dest)
+        graph.edges.remove((break_node_source, break_node_dest))
+        graph.add_node(new_reg_route_source)
+        graph.add_node(new_reg_tile)
+        graph.add_node(new_reg_route_dest)
 
-    #     graph.add_edge(break_node_source, new_reg_route_source)
-    #     graph.add_edge(new_reg_route_source, new_reg_tile)
-    #     graph.add_edge(new_reg_tile, new_reg_route_dest)
-    #     graph.add_edge(new_reg_route_dest, break_node_dest)
+        graph.add_edge(break_node_source, new_reg_route_source)
+        graph.add_edge(new_reg_route_source, new_reg_tile)
+        graph.add_edge(new_reg_tile, new_reg_route_dest)
+        graph.add_edge(new_reg_route_dest, break_node_dest)
 
-    #     reg_into_route(routes, break_node_source, new_reg_route_source)
-    #     placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
-    #     id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+        reg_into_route(routes, break_node_source, new_reg_route_source)
+        placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
+        id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
 
-    #     graph.update_sources_and_sinks()
-    #     graph.update_edge_kernels()
+        graph.update_sources_and_sinks()
+        graph.update_edge_kernels()
 
 
 def break_at(graph, node1, id_to_name, placement, routing):
@@ -250,7 +250,7 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                     if len(graph.sinks[curr_node]) != 1:
                         break
                     curr_node = graph.sinks[curr_node][0]
-                
+
                 for idx in range(len(path)):
                     if graph.sparse:
                         if idx + 4 >= len(path):
@@ -267,7 +267,13 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                             and path[idx + 4][0].route_type == RouteType.RMUX
                         ):
                             try:
-                                break_crit_path(graph, id_to_name, path[idx:idx+5], placement, routing)
+                                break_crit_path(
+                                    graph,
+                                    id_to_name,
+                                    path[idx : idx + 5],
+                                    placement,
+                                    routing,
+                                )
                             except:
                                 print("Skip")
                     else:
@@ -280,11 +286,16 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                             and path[idx + 1][0].route_type == RouteType.RMUX
                         ):
                             try:
-                                break_crit_path(graph, id_to_name, path[idx:idx+2], placement, routing)
+                                break_crit_path(
+                                    graph,
+                                    id_to_name,
+                                    path[idx : idx + 2],
+                                    placement,
+                                    routing,
+                                )
                             except:
                                 print("Skip")
 
-                
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
     kernel_output_nodes = graph.get_output_tiles_of_kernel(kernel)
@@ -337,7 +348,6 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
     node_cycles = {}
 
     for node in nodes:
-
         if node.kernel not in node_cycles:
             node_cycles[node.kernel] = {}
 
@@ -544,9 +554,10 @@ def find_closest_match(kernel_target, candidates):
     print("No match for", kernel_target)
 
 
-def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, port_remap):
-
-    port_remap_r = {v:k for k,v in port_remap.items()}
+def calculate_latencies(
+    graph, kernel_graph, node_latencies, kernel_latencies, port_remap
+):
+    port_remap_r = {v: k for k, v in port_remap.items()}
 
     nodes = kernel_graph.topological_sort()
     max_latencies = {}
@@ -566,7 +577,6 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                 max_latencies[node16] -= max_latencies[node1]
                 max_latencies[node1] = 0
                 assert max_latencies[node16] >= 0, f"{node16} latency is negative"
-
 
     for kernel, latency_dict in kernel_latencies.items():
         if "_glb_" in kernel:
@@ -591,9 +601,9 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                     if source.port in port_remap_r:
                                         port = port_remap_r[source.port]
                                         if port == d2["pe_port"][1]:
-                                            kernel_latencies[kernel][kernel_port][port_num][
-                                                "latency"
-                                            ] = node_latencies[match][source]
+                                            kernel_latencies[kernel][kernel_port][
+                                                port_num
+                                            ]["latency"] = node_latencies[match][source]
                                             found = True
                                             found_port = True
                                             break
@@ -602,7 +612,7 @@ def calculate_latencies(graph, kernel_graph, node_latencies, kernel_latencies, p
                                     kernel_latencies[kernel][kernel_port][port_num][
                                         "latency"
                                     ] = node_latencies[match][graph.sources[pe][0]]
-                                        
+
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
 
@@ -747,14 +757,12 @@ def pipeline_pnr(
     pes_with_packed_ponds,
     sparse,
 ):
-
     if load_only:
         id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
         if os.path.isfile(id_to_name_filename):
             id_to_name = load_id_to_name(id_to_name_filename)
         return placement, routing, id_to_name
 
-    
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)

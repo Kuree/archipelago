@@ -28,13 +28,13 @@ import time
 
 # Draw parameters
 GLOBAL_TILE_WIDTH = 200
-GLOBAL_TILE_MARGIN = 40 #each side is 40 pixs
+GLOBAL_TILE_MARGIN = 40  # each side is 40 pixs
 GLOBAL_TILE_WIDTH_INNER = GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN
-GLOBAL_OFFSET_X = 20 #outer margin
+GLOBAL_OFFSET_X = 20  # outer margin
 GLOBAL_OFFSET_Y = 20
 GLOBAL_NUM_TRACK = 5
 GLOBAL_ARROW_DISTANCE = GLOBAL_TILE_WIDTH_INNER // (GLOBAL_NUM_TRACK * 2 + 1)
-ARROW_WIDTH=10
+ARROW_WIDTH = 10
 
 side_map = ["Right", "Bottom", "Left", "Top"]
 io_map = ["IN", "OUT"]
@@ -83,7 +83,7 @@ def draw_arrow(
         lxy = (x + dx * rx, y + -dx * ry)
         rxy = (x + dx * rx, y + dx * ry)
     draw.line(xy=xy, fill=color, width=width)
-    draw.polygon([(x + dx * len, y + dy * len), lxy, rxy], fill = color)
+    draw.polygon([(x + dx * len, y + dy * len), lxy, rxy], fill=color)
 
     pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 40
     if source_port:
@@ -94,7 +94,7 @@ def draw_arrow(
         x += dx * len
         y += dy * len
         xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
-        draw.polygon(xy=xy, fill="Green", outline="Black", width=1) #TODO same color
+        draw.polygon(xy=xy, fill="Green", outline="Black", width=1)  # TODO same color
 
 
 def draw_diagonal_arrow(
@@ -169,7 +169,7 @@ def draw_arrow_between_sb(draw, node, node2, color="Black", width=1):
 
     if tile_x != tile_x2 or tile_y != tile_y2:
         return
-    
+
     if side == "Top":
         if io == "IN":
             dir = "DOWN"
@@ -360,7 +360,6 @@ def draw_arrow_on_tile(
     source_port=False,
     sink_port=False,
 ):
-
     if side == "Top":
         if io == "IN":
             dir = "DOWN"
@@ -460,7 +459,6 @@ def draw_arrow_on_tile(
 
 
 def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
-
     if "NORTH" in reg_name:
         x = (
             GLOBAL_OFFSET_X
@@ -468,9 +466,14 @@ def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
             + tile_x * GLOBAL_TILE_WIDTH
             + (track_id + 1 + GLOBAL_NUM_TRACK) * GLOBAL_ARROW_DISTANCE
         )
-        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH/7)
+        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH / 7)
     elif "EAST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - (GLOBAL_TILE_WIDTH/7)
+        x = (
+            GLOBAL_OFFSET_X
+            + tile_x * GLOBAL_TILE_WIDTH
+            + GLOBAL_TILE_WIDTH
+            - (GLOBAL_TILE_WIDTH / 7)
+        )
         y = (
             GLOBAL_OFFSET_Y
             + GLOBAL_TILE_MARGIN
@@ -484,9 +487,14 @@ def draw_reg_on_tile(draw, tile_x, tile_y, reg_name, track_id):
             + tile_x * GLOBAL_TILE_WIDTH
             + (track_id + 1) * GLOBAL_ARROW_DISTANCE
         )
-        y = GLOBAL_OFFSET_Y + tile_y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_WIDTH - (GLOBAL_TILE_WIDTH/7)
+        y = (
+            GLOBAL_OFFSET_Y
+            + tile_y * GLOBAL_TILE_WIDTH
+            + GLOBAL_TILE_WIDTH
+            - (GLOBAL_TILE_WIDTH / 7)
+        )
     elif "WEST" in reg_name:
-        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH/7)
+        x = GLOBAL_OFFSET_X + tile_x * GLOBAL_TILE_WIDTH + (GLOBAL_TILE_WIDTH / 7)
         y = (
             GLOBAL_OFFSET_Y
             + GLOBAL_TILE_MARGIN
@@ -568,7 +576,11 @@ def draw_used_routes(draw, routing_result_graph, width):
 
             if last_sb:
                 draw_arrow_between_sb(
-                    draw, node, last_sb, color=net_colors[node.net_id], width=ARROW_WIDTH
+                    draw,
+                    node,
+                    last_sb,
+                    color=net_colors[node.net_id],
+                    width=ARROW_WIDTH,
                 )
         elif node.route_type == RouteType.REG and node.bit_width == width:
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
@@ -616,7 +628,11 @@ def draw_crit_routes(draw, routing_result_graph, width, crit_nodes):
 
             if last_sb:
                 draw_arrow_between_sb(
-                    draw, node, last_sb, color=net_colors[node.net_id], width=ARROW_WIDTH
+                    draw,
+                    node,
+                    last_sb,
+                    color=net_colors[node.net_id],
+                    width=ARROW_WIDTH,
                 )
         elif node.route_type == RouteType.REG and node.bit_width == width:
             draw_reg_on_tile(draw, node.x, node.y, node.reg_name, node.track)
@@ -630,7 +646,16 @@ def add_loc(draw, x, y):
     draw.text(xy=cxy, text=f"({x},{y})", fill="Black")
 
 
-def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, width=2, Content=False):
+def create_tile(
+    draw,
+    x,
+    y,
+    w=GLOBAL_TILE_WIDTH,
+    tile_type=None,
+    tile_id=None,
+    width=2,
+    Content=False,
+):
     color_tile = "lightgrey"
     color_line = "Black"
     pr = 0.4
@@ -644,19 +669,30 @@ def create_tile(draw, x, y, w=GLOBAL_TILE_WIDTH, tile_type=None, tile_id=None, w
 
 
 def draw_all_tiles(draw, img, graph):
-    tmp = Image.new("RGB", (GLOBAL_TILE_WIDTH + 2 * GLOBAL_OFFSET_X, 
-        GLOBAL_TILE_WIDTH * 2 + 2 * GLOBAL_OFFSET_Y), "White")
+    tmp = Image.new(
+        "RGB",
+        (
+            GLOBAL_TILE_WIDTH + 2 * GLOBAL_OFFSET_X,
+            GLOBAL_TILE_WIDTH * 2 + 2 * GLOBAL_OFFSET_Y,
+        ),
+        "White",
+    )
     draw1 = ImageDraw.Draw(tmp)
 
-    #draw sample IO tile
+    # draw sample IO tile
     switchbox = graph[0, 0].switchbox
     sides = switchbox.SIDES
 
     create_tile(draw=draw1, x=0, y=0)
-    box1 = (GLOBAL_OFFSET_X, GLOBAL_OFFSET_Y, GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_X, GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_Y)
+    box1 = (
+        GLOBAL_OFFSET_X,
+        GLOBAL_OFFSET_Y,
+        GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_X,
+        GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_Y,
+    )
     region1 = tmp.crop(box1)
 
-    #draw sample tile
+    # draw sample tile
     switchbox = graph[0, 1].switchbox
     sides = switchbox.SIDES
 
@@ -676,12 +712,21 @@ def draw_all_tiles(draw, img, graph):
                     io=io,
                     track_id=i % GLOBAL_NUM_TRACK,
                 )
-    box2 = (GLOBAL_OFFSET_X, GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_Y, GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_X, GLOBAL_TILE_WIDTH * 2 + GLOBAL_OFFSET_Y)
+    box2 = (
+        GLOBAL_OFFSET_X,
+        GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_Y,
+        GLOBAL_TILE_WIDTH + GLOBAL_OFFSET_X,
+        GLOBAL_TILE_WIDTH * 2 + GLOBAL_OFFSET_Y,
+    )
     region2 = tmp.crop(box2)
 
     for x, y in graph:
-        box = (GLOBAL_OFFSET_X + x * GLOBAL_TILE_WIDTH, GLOBAL_OFFSET_Y + y * GLOBAL_TILE_WIDTH,
-            GLOBAL_OFFSET_X + (x + 1) * GLOBAL_TILE_WIDTH, GLOBAL_OFFSET_Y + (y + 1) * GLOBAL_TILE_WIDTH)
+        box = (
+            GLOBAL_OFFSET_X + x * GLOBAL_TILE_WIDTH,
+            GLOBAL_OFFSET_Y + y * GLOBAL_TILE_WIDTH,
+            GLOBAL_OFFSET_X + (x + 1) * GLOBAL_TILE_WIDTH,
+            GLOBAL_OFFSET_Y + (y + 1) * GLOBAL_TILE_WIDTH,
+        )
         if y == 0:
             img.paste(region1, box)
         else:
@@ -689,15 +734,15 @@ def draw_all_tiles(draw, img, graph):
         add_loc(draw, x, y)
 
 
-def create_tile_types(count, width = 2):
+def create_tile_types(count, width=2):
     temp = dict()
     w = GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN
     sx = 0
     ex = w
-    dy = w//count
+    dy = w // count
     w = GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN
     ex = w
-    dy = w//count
+    dy = w // count
     tmp = Image.new("RGB", (ex, dy * 10), "White")
 
     draw = ImageDraw.Draw(tmp)
@@ -734,7 +779,6 @@ def create_tile_types(count, width = 2):
         box = (sx, sy, ex, ey)
         temp[tile_type] = tmp.crop(box)
     return temp
-        
 
 
 def draw_used_tiles(draw, img, tile_history, count, tmp, width=2):
@@ -746,12 +790,12 @@ def draw_used_tiles(draw, img, tile_history, count, tmp, width=2):
         ex = sx + w
         by = GLOBAL_OFFSET_Y + y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
 
-        dy = w//count
+        dy = w // count
         for i in range(len(cont[0])):
             tile_type = cont[0][i]
             tile_id = cont[1][i]
             sy = by + i * dy
-            ey = by + (i+1)*dy
+            ey = by + (i + 1) * dy
             box = (sx, sy, ex, ey)
             img.paste(tmp[tile_type], box)
 
@@ -765,12 +809,12 @@ def label_used_tiles(draw, img, tile_history, count, width=2):
         ex = sx + w
         by = GLOBAL_OFFSET_Y + y * GLOBAL_TILE_WIDTH + GLOBAL_TILE_MARGIN
 
-        dy = w//count
+        dy = w // count
         for i in range(len(cont[0])):
             tile_type = cont[0][i]
             tile_id = cont[1][i]
             sy = by + i * dy
-            ey = by + (i+1)*dy
+            ey = by + (i + 1) * dy
 
             txy1 = (sx + int(w * 0.3), by + int(dy * 0.4) + i * dy)
             txy2 = (sx + int(w * 0.6), by + int(dy * 0.4) + i * dy)
@@ -778,6 +822,7 @@ def label_used_tiles(draw, img, tile_history, count, width=2):
             draw.text(xy=txy2, text=tile_id, fill="Black")
         cxy = (sx + int(w * 0.05), by + int(w * 0.05))
         draw.text(xy=cxy, text=f"({x},{y})", fill="Black")
+
 
 def load_graph(graph_files):
     graph_result = {}
@@ -790,7 +835,6 @@ def load_graph(graph_files):
 
 
 def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
-
     if not Image or not ImageDraw:
         print("Please install python package Pillow to generate visualization")
         return
@@ -821,14 +865,13 @@ def visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, app_dir):
 
     template = create_tile_types(count)
 
-
     for width, graph in routing_graphs.items():
         # initialize image
         img_width = array_width * GLOBAL_TILE_WIDTH + 3 * GLOBAL_OFFSET_X
         img_height = array_height * GLOBAL_TILE_WIDTH + 3 * GLOBAL_OFFSET_X
         img = Image.new("RGB", (img_width, img_height), "White")
         draw = ImageDraw.Draw(img)
-        
+
         # draw all the tiles
         draw_all_tiles(draw, img, graph)
 

@@ -166,7 +166,7 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                     f"PE_B{parent.bit_width}_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                 ]
             )
-        
+
         if sparse:
             if (parent.x + 1) % mem_column == 0:
                 comp.sb_delay_rv.append(
@@ -198,44 +198,33 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 def calc_fifo_to_out(graph, node, parent, comp, mem_tile_column):
     assert graph.sparse
 
-    if not (isinstance(graph.sources[parent][0], RouteNode) and graph.sources[parent][0].route_type == RouteType.SB):
+    if not (
+        isinstance(graph.sources[parent][0], RouteNode)
+        and graph.sources[parent][0].route_type == RouteType.SB
+    ):
         if (node.x + 1) % mem_tile_column == 0:
             tile_suffix = "mem"
         else:
             tile_suffix = "pe"
 
-        if (
-            isinstance(parent, RouteNode)
-            and parent.route_type == RouteType.REG
-        ):
+        if isinstance(parent, RouteNode) and parent.route_type == RouteType.REG:
             # Split fifo to SB out
             prefix = "split"
         else:
             # Sparse prim fifo to SB out
             prefix = "prim"
 
-        comp.sb_delay.append(
-            comp.delays[
-                f"{prefix}_fifo_to_sb_out_{tile_suffix}"
-            ]
-        )
+        comp.sb_delay.append(comp.delays[f"{prefix}_fifo_to_sb_out_{tile_suffix}"])
 
         comp.sb_delay_rv.append(
-            comp.delays[
-                f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"
-            ]
+            comp.delays[f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"]
         )
 
         # Ready and-ing logic to produce valid
-        comp.sb_delay_rv.append(
-            comp.delays[
-                f"ready_and_valid_{tile_suffix}"
-            ]
-        )
+        comp.sb_delay_rv.append(comp.delays[f"ready_and_valid_{tile_suffix}"])
 
 
 def sta(graph):
-
     mem_tile_column = get_mem_tile_columns(graph)
     nodes = graph.topological_sort()
     timing_info = {}
@@ -298,7 +287,11 @@ def sta(graph):
                             comp.rmux += 1
                         if parent.route_type != RouteType.REG:
                             comp.available_regs += 1
-                elif node.route_type == RouteType.PORT and isinstance(parent, TileNode) and parent.tile_type == TileType.IO16:
+                elif (
+                    node.route_type == RouteType.PORT
+                    and isinstance(parent, TileNode)
+                    and parent.tile_type == TileType.IO16
+                ):
                     comp.sb_delay_rv.append(300)
                     comp.sb_delay_rv.append(635)
 
@@ -330,11 +323,6 @@ def sta(graph):
     print("\tCritical Path:", max_delay, "ps")
     print("\tCritical Path Info:")
     timing_info[max_node].print()
-
-    # for n,v in node_to_timing.items():
-    #     print(str(n),v)
-    #     timing_info[n].print()
-        
 
     max_node = list(node_to_timing.keys())[0]
     curr_node = max_node
@@ -394,7 +382,6 @@ def parse_args():
 
 
 def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
-
     netlist, buses = pythunder.io.load_netlist(packed_file)
     placement = load_placement(placement_file)
     routing = load_routing_result(routing_file)

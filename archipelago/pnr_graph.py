@@ -28,7 +28,6 @@ class RouteNode:
         reg=False,
         kernel=None,
     ):
-
         assert x is not None
         self.x = x
         assert y is not None
@@ -110,7 +109,6 @@ class TileType(Enum):
 
 class TileNode:
     def __init__(self, x, y, tile_id, kernel):
-
         self.x = x
         self.y = y
 
@@ -145,9 +143,7 @@ class RoutingResultGraph:
     def __init__(self):
         self.nodes: List[Union[RouteNode, TileNode]] = []
         self.tile_id_to_tile: Dict[str, Union[RouteNode, TileNode]] = {}
-        self.edges: List[
-            (Union[RouteNode, TileNode], Union[RouteNode, TileNode])
-        ] = []
+        self.edges: List[(Union[RouteNode, TileNode], Union[RouteNode, TileNode])] = []
         self.edge_weights: Dict[
             (Union[RouteNode, TileNode], Union[RouteNode, TileNode]), int
         ] = {}
@@ -446,7 +442,7 @@ class RoutingResultGraph:
         for sink in self.sinks[v]:
             if sink not in visited:
                 retval = self.is_cyclic_util(sink, visited, rec_stack)
-                
+
                 if retval != None:
                     if sink in retval:
                         retval.append("cyclefinished")
@@ -470,8 +466,8 @@ class RoutingResultGraph:
                     removed = False
                     for idx, n in enumerate(cycle):
                         if isinstance(n, TileNode) and n.tile_type == TileType.MEM:
-                            self.remove_edge((cycle[idx+1], n))
-                            print("removing edge", str(cycle[idx+1]), str(n))
+                            self.remove_edge((cycle[idx + 1], n))
+                            print("removing edge", str(cycle[idx + 1]), str(n))
                             removed = True
                     if not removed:
                         self.remove_edge((cycle[1], cycle[0]))
@@ -735,8 +731,16 @@ class RoutingResultGraph:
 
         g.render(filename=filename)
 
+
 def construct_graph(
-    placement, routes, id_to_name, netlist, pe_latency=0, pond_latency=0, io_latency=0, sparse=False
+    placement,
+    routes,
+    id_to_name,
+    netlist,
+    pe_latency=0,
+    pond_latency=0,
+    io_latency=0,
+    sparse=False,
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
@@ -794,10 +798,9 @@ def construct_graph(
     graph.update_sources_and_sinks()
 
     graph.fix_regs(netlist)
-    
+
     while graph.fix_cycles():
         pass
-
 
     id_to_input_ports = {}
     for net_id, conns in netlist.items():
@@ -852,7 +855,6 @@ def construct_graph(
     while graph.fix_cycles():
         pass
 
-    graph.print_graph("/aha/debug")
     return graph
 
 
