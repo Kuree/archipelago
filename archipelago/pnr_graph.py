@@ -635,59 +635,39 @@ class RoutingResultGraph:
         unsolved_regs = []
         for node in self.get_tiles():
             if node.tile_type == TileType.REG:
-                assert (
-                    node.x,
-                    node.y,
-                ) in self.placement, (
-                    f"Reg at ({node.x},{node.y}) not in placement result"
-                )
-                regs = self.placement[(node.x, node.y)]
-                regs = [reg for reg in regs if reg[0] == "r"]
-                if len(regs) == 1:
-                    node.tile_id = regs[0]
-
-                    if len(self.id_to_name[regs[0]].split("$")) > 0:
-                        kernel = self.id_to_name[regs[0]].split("$")[0]
-                    else:
-                        kernel = None
-
-                    node.kernel = kernel
-
-                else:
-                    unsolved_regs.append((node, regs))
+                unsolved_regs.append(node)
 
         seen_regs = []
-
         while len(unsolved_regs) > 0:
             resolved = False
-            (node, regs) = unsolved_regs.pop(0)
+            node = unsolved_regs.pop(0)
             if node in seen_regs:
-                print(f"Couldn't associate {node} with {regs} in placement file")
+                print(f"Couldn't associate {node} with reg in netlist")
+                print([str(r) for r in seen_regs])
                 return
             seen_regs.append(node)
 
-            prev_tile_found = False
-            prev_node = node
-            while not prev_tile_found:
-                assert len(self.sources[prev_node]) == 1, self.sources[prev_node]
-                prev_node = self.sources[prev_node][0]
+            next_tile_found = False
+            next_node = node
+            while not next_tile_found:
+                # assert len(self.sinks[next_node]) == 1, self.sinks[next_node]
+                port = next_node
+                next_node = self.sinks[next_node][0]
 
-                if isinstance(prev_node, TileNode):
-                    prev_tile_found = True
+                if isinstance(next_node, TileNode):
+                    next_tile_found = True
 
-            if prev_node.kernel != None:
+            if next_node.kernel != None:
                 for net_id, net in netlist.items():
-                    if net[0][0] == prev_node.tile_id:
-                        for id_ in net[1:]:
-                            if id_[0] in regs:
-                                resolved = True
-                                node.tile_id = id_[0]
-                                node.kernel = self.id_to_name[node.tile_id].split("$")[
-                                    0
-                                ]
-                                seen_regs = []
+                    for id_ in net[1:]:
+                        if id_[0] == next_node.tile_id and id_[1] == port.port:
+                            resolved = True
+                            node.tile_id = net[0][0]
+                            node.kernel = self.id_to_name[node.tile_id].split("$")[0]
+                            seen_regs = []
+
             if not resolved:
-                unsolved_regs.append((node, regs))
+                unsolved_regs.append(node)
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = []
