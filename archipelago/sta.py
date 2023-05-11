@@ -95,7 +95,7 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
     if sparse:
         if graph.sinks[node][0].route_type == RouteType.PORT:
-            if "MEM" in graph.sinks[node][0].route_type.port:
+            if "MEM" in graph.sinks[node][0].port:
                 comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM_fifo"])
                 comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_MEM_fifo_valid"])
             else:
@@ -103,7 +103,7 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
                 comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_PE_fifo_valid"])
     else:
         if graph.sinks[node][0].route_type == RouteType.PORT:
-            if "MEM" in graph.sinks[node][0].route_type.port:
+            if "MEM" in graph.sinks[node][0].port:
                 comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM"])
             else:
                 comp.sb_delay.append(comp.delays[f"SB_IN_to_PE"])
