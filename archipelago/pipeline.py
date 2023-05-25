@@ -566,7 +566,6 @@ def calculate_latencies(
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.COMPUTE:
             max_latencies[node.kernel] = node.latency
-
     for node16 in max_latencies:
         for node1 in max_latencies:
             if (
@@ -589,7 +588,7 @@ def calculate_latencies(
                         kernel_latencies[kernel][kernel_port][port_num][
                             "latency"
                         ] = max_latencies[match]
-                    else:
+                    elif d2["pe_port"] != "":
                         found = False
                         for pe in graph.get_tiles():
                             if (
