@@ -13,7 +13,7 @@ setup(
     url="https://github.com/Kuree/archipelago",
     install_requires=[
         "pythunder",
-        "pycyclone",
+        "pycyclone"
     ],
     data_files=[
         ('sta_delays', ['archipelago/sta_delays.json']),
