@@ -240,7 +240,7 @@ def pnr(
                     has_fixed = False
 
 
-                # os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
+                os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
                 print(
                     "Trying placement with PnR placer density:",
                     os.environ["PNR_PLACER_DENSITY"],
