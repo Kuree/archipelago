@@ -365,6 +365,7 @@ class RoutingResultGraph:
             self.tile_id_to_tile[node.tile_id] = node
 
     def add_edge(self, node1, node2):
+        #breakpoint()
         assert node1 in self.nodes, f"{node1} not in nodes"
         assert node2 in self.nodes, f"{node2} not in nodes"
 
@@ -532,6 +533,7 @@ class RoutingResultGraph:
         return node
 
     def gen_placement(self, placement, netlist):
+        #breakpoint()
         for blk_id, place in placement.items():
             if place not in self.placement:
                 self.placement[place] = []
@@ -764,6 +766,7 @@ def construct_graph(
 
                 if node2.route_type == RouteType.PORT:
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
+                    #breakpoint()
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
                     reg_tile = graph.get_or_create_reg_at(

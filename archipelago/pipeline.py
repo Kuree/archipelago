@@ -777,6 +777,7 @@ def pipeline_pnr(
     else:
         io_cycles = 1
 
+    #breakpoint()
     graph = construct_graph(
         placement,
         routing,

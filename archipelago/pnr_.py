@@ -93,9 +93,12 @@ def pnr(
     else:
         wave_filename = None
 
+    breakpoint()
+
     if id_to_name is None:
         id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
 
+    
     pnr_placer_exp_set = False
     if not load_only:
         # Three cases:
@@ -175,18 +178,18 @@ def pnr(
                 if routed:
                     placement_result = pycyclone.io.load_placement(placement_filename)
                     routing_result = load_routing_result(route_filename)
-                    placement_result, routing_result, id_to_name = pipeline_pnr(
-                        cwd,
-                        placement_result,
-                        routing_result,
-                        id_to_name,
-                        input_netlist[0],
-                        load_only,
-                        harden_flush,
-                        pipeline_config_interval,
-                        pes_with_packed_ponds,
-                        sparse
-                    )    
+                    #placement_result, routing_result, id_to_name = pipeline_pnr(
+                    #    cwd,
+                    #    placement_result,
+                    #    routing_result,
+                    #    id_to_name,
+                    #    input_netlist[0],
+                    #    load_only,
+                    #    harden_flush,
+                    #    pipeline_config_interval,
+                    #    pes_with_packed_ponds,
+                    #    sparse
+                    #)    
                     freq = run_sta(
                         packed_file, placement_filename, route_filename, id_to_name, sparse
                     )
@@ -277,23 +280,25 @@ def pnr(
     if not os.path.isfile(route_filename):
         raise PnRException()
 
+    breakpoint()
+
     # need to load it back up
     placement_result = pycyclone.io.load_placement(placement_filename)
     routing_result = load_routing_result(route_filename)
 
-    if id_to_name is not None:
-        placement_result, routing_result, id_to_name = pipeline_pnr(
-            cwd,
-            placement_result,
-            routing_result,
-            id_to_name,
-            input_netlist[0],
-            load_only,
-            harden_flush,
-            pipeline_config_interval,
-            pes_with_packed_ponds,
-            sparse
-        )
+    #if id_to_name is not None:
+    #    placement_result, routing_result, id_to_name = pipeline_pnr(
+    #        cwd,
+    #        placement_result,
+    #        routing_result,
+    #        id_to_name,
+    #        input_netlist[0],
+    #        load_only,
+    #        harden_flush,
+    #        pipeline_config_interval,
+    #        pes_with_packed_ponds,
+    #        sparse
+    #    )
 
     # tear down
     if use_temp:
