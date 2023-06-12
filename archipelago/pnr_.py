@@ -264,7 +264,7 @@ def pnr(
                 except:
                     print("Unable to route with PNR_PLACER_DENSITY:", pnr_placer_density)
 
-                pnr_placer_density += 5
+                pnr_placer_density += 1
 
     if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
         del os.environ["PNR_PLACER_EXP"]
