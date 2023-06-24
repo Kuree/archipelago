@@ -262,6 +262,7 @@ def sta(graph):
                 if node.route_type == RouteType.PORT and isinstance(
                     graph.sinks[node][0], TileNode
                 ):
+                    print(graph.sinks[node][0].input_port_break_path)
                     if graph.sinks[node][0].input_port_break_path[node.port]:
                         comp = PathComponents()
 
@@ -439,7 +440,7 @@ def main():
         placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
 
-    clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
+    #clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
     if visualize:
         dirname = os.path.dirname(packed_file)
@@ -451,6 +452,7 @@ def main():
         assert os.path.exists(graph16), route + " does not exists"
         routing_graphs = load_graph([graph1, graph16])
 
+        crit_nodes = []
         visualize_pnr(routing_graphs, routing_result_graph, crit_nodes, dirname)
 
     return clock_speed

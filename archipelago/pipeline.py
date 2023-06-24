@@ -790,7 +790,7 @@ def pipeline_pnr(
     )
 
     print("\nApplication Frequency:")
-    curr_freq, crit_path, crit_nets = sta(graph)
+    #curr_freq, crit_path, crit_nets = sta(graph)
 
     update_kernel_latencies(
         app_dir,
@@ -894,14 +894,19 @@ def pipeline_pnr(
     elif "EXHAUSTIVE_PIPE" in os.environ:
         starting_regs = graph.added_regs
         exhaustive_pipe(graph, id_to_name, placement, routing)
-        curr_freq, crit_path, crit_nets = sta(graph)
+        #curr_freq, crit_path, crit_nets = sta(graph)
         print(
             "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
         )
 
-    freq_file = os.path.join(app_dir, "design.freq")
-    fout = open(freq_file, "w")
-    fout.write(f"{curr_freq}\n")
+    #freq_file = os.path.join(app_dir, "design.freq")
+    #fout = open(freq_file, "w")
+    #fout.write(f"{curr_freq}\n")
+    
+    for route in routing["e8_2"][0]:
+        for seg in route:
+            if seg == "REG":
+                routing["e8_2"][0].remove(route)
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)

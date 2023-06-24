@@ -365,7 +365,6 @@ class RoutingResultGraph:
             self.tile_id_to_tile[node.tile_id] = node
 
     def add_edge(self, node1, node2):
-        #breakpoint()
         assert node1 in self.nodes, f"{node1} not in nodes"
         assert node2 in self.nodes, f"{node2} not in nodes"
 
@@ -544,10 +543,29 @@ class RoutingResultGraph:
                 if conn[0] not in self.id_to_ports:
                     self.id_to_ports[conn[0]] = []
                 self.id_to_ports[conn[0]].append(conn[1])
+                if (conn[0] + "_2") not in self.id_to_ports:
+                    self.id_to_ports[conn[0]+"_2"] = []
+                self.id_to_ports[conn[0]+"_2"].append(conn[1])
+        self.id_to_ports['p100'] = []
+        self.id_to_ports['p101'] = []
+        self.id_to_ports['p102'] = []
+        self.id_to_ports['p100'].append('PE_input_width_17_num_2')
+        self.id_to_ports['p100'].append('PE_input_width_17_num_0')
+        self.id_to_ports['p100'].append('PE_input_width_17_num_1')
+        self.id_to_ports['p100'].append('PE_input_width_17_num_3')
+        self.id_to_ports['p101'].append('PE_input_width_17_num_2')
+        self.id_to_ports['p101'].append('PE_input_width_17_num_0')
+        self.id_to_ports['p101'].append('PE_input_width_17_num_1')
+        self.id_to_ports['p101'].append('PE_input_width_17_num_3')
+        self.id_to_ports['p102'].append('PE_input_width_17_num_2')
+        self.id_to_ports['p102'].append('PE_input_width_17_num_0')
+        self.id_to_ports['p102'].append('PE_input_width_17_num_1')
+        self.id_to_ports['p102'].append('PE_input_width_17_num_3')
 
     def get_tile_at(self, x, y, port):
         tiles = self.placement[(x, y)]
 
+        print(self.id_to_ports)
         for tile in tiles:
             if port in self.id_to_ports[tile]:
                 return tile
@@ -742,6 +760,7 @@ def construct_graph(
         max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
 
+    
     for net_id, net in routes.items():
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
@@ -752,6 +771,7 @@ def construct_graph(
                 graph.add_edge(node1, node2)
 
                 if node1.route_type == RouteType.PORT:
+                    print(node1.x, node1.y, node1.port)
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
@@ -765,8 +785,9 @@ def construct_graph(
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
+                    print(node2.x, node2.y)
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
-                    #breakpoint()
+                    print("tile_id",tile_id)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
                     reg_tile = graph.get_or_create_reg_at(
