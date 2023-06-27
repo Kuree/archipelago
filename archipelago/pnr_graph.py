@@ -538,6 +538,13 @@ class RoutingResultGraph:
                 self.placement[place] = []
             self.placement[place].append(blk_id)
 
+        num_pes = int(os.getenv("PES"))
+        pe_list = []
+        for pe in range(num_pes):
+            pe_num = 100+pe
+            pe_list.append(f'p{pe_num}')
+
+        # KALHAN MANUAL EDIT
         for net_id, conns in netlist.items():
             for conn in conns:
                 if conn[0] not in self.id_to_ports:
@@ -546,21 +553,14 @@ class RoutingResultGraph:
                 if (conn[0] + "_2") not in self.id_to_ports:
                     self.id_to_ports[conn[0]+"_2"] = []
                 self.id_to_ports[conn[0]+"_2"].append(conn[1])
-        self.id_to_ports['p100'] = []
-        self.id_to_ports['p101'] = []
-        self.id_to_ports['p102'] = []
-        self.id_to_ports['p100'].append('PE_input_width_17_num_2')
-        self.id_to_ports['p100'].append('PE_input_width_17_num_0')
-        self.id_to_ports['p100'].append('PE_input_width_17_num_1')
-        self.id_to_ports['p100'].append('PE_input_width_17_num_3')
-        self.id_to_ports['p101'].append('PE_input_width_17_num_2')
-        self.id_to_ports['p101'].append('PE_input_width_17_num_0')
-        self.id_to_ports['p101'].append('PE_input_width_17_num_1')
-        self.id_to_ports['p101'].append('PE_input_width_17_num_3')
-        self.id_to_ports['p102'].append('PE_input_width_17_num_2')
-        self.id_to_ports['p102'].append('PE_input_width_17_num_0')
-        self.id_to_ports['p102'].append('PE_input_width_17_num_1')
-        self.id_to_ports['p102'].append('PE_input_width_17_num_3')
+        
+        for pe in pe_list:
+            self.id_to_ports[pe] = []
+            self.id_to_ports[pe].append('PE_input_width_17_num_2')
+            self.id_to_ports[pe].append('PE_input_width_17_num_0')
+            self.id_to_ports[pe].append('PE_input_width_17_num_1')
+            self.id_to_ports[pe].append('PE_input_width_17_num_3')
+
 
     def get_tile_at(self, x, y, port):
         tiles = self.placement[(x, y)]

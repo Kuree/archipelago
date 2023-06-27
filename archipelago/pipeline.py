@@ -903,10 +903,12 @@ def pipeline_pnr(
     #fout = open(freq_file, "w")
     #fout.write(f"{curr_freq}\n")
     
-    for route in routing["e8_2"][0]:
-        for seg in route:
-            if seg == "REG":
-                routing["e8_2"][0].remove(route)
+    # KALHAN MANUAL EDIT
+    if os.getenv('CONFIG') == '2':
+        for route in routing["e8_2"][0]:
+            for seg in route:
+                if seg == "REG":
+                    routing["e8_2"][0].remove(route)
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)

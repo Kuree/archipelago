@@ -1,6 +1,7 @@
 import tempfile
 import os
 import shutil
+import subprocess
 from .io import dump_packed_result
 from .place import place
 from .route import route
@@ -93,7 +94,17 @@ def pnr(
     else:
         wave_filename = None
 
-    breakpoint()
+    if os.getenv('CONFIG') == '1':
+        shutil.copyfile("/aha/matmul_config1", "SIM_DIR/design.packed")
+    elif os.getenv('CONFIG') == '2':
+        shutil.copyfile("/aha/matmul_config2", "SIM_DIR/design.packed")
+        subprocess.run(["python3", "/aha/prune17.py"])
+    elif os.getenv('CONFIG') == '3':
+        shutil.copyfile("/aha/matmul_config3", "SIM_DIR/design.packed")
+        subprocess.run(["python3", "/aha/prune17.py"])
+
+    shutil.copyfile("/aha/design.id_to_name", "SIM_DIR/design.id_to_name")
+
     if id_to_name is None:
         id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
 
@@ -304,7 +315,11 @@ def pnr(
             assert cwd_dir is not None
             cwd_dir.__exit__(None, None, None)
     
-    breakpoint()
+    if os.getenv('CONFIG') == '2':
+        subprocess.run(["python3", "/aha/fix_route.py"])
+    elif os.getenv('CONFIG') == '3':
+        subprocess.run(["python3", "/aha/fix_route.py"])
+
     routing_result = load_routing_result(route_filename)
 
     if hasattr(arch, "dump_pnr"):
@@ -316,6 +331,7 @@ def pnr(
         shutil.copy2(route_filename, copy_to_dir)
         if wave_filename is not None:
             shutil.copy2(wave_filename, copy_to_dir)
+
 
     return placement_result, routing_result, id_to_name
 
