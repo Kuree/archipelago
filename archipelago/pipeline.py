@@ -238,18 +238,37 @@ def break_at(graph, node1, id_to_name, placement, routing):
         idx += 1
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
+def is_io_path(graph, node):
+    curr_node = node
+
+    while curr_node not in graph.get_tiles():
+        curr_node = graph.sources[curr_node][0]
+
+    return curr_node in graph.get_input_ios()
+
 
 def exhaustive_pipe(graph, id_to_name, placement, routing):
     for node in graph.nodes:
+        if not (len(graph.sinks[node]) > 1 or node in graph.get_input_ios()):
+            continue
+
+        if is_io_path(graph, node):
+            continue
+
         if node in graph.get_tiles() or len(graph.sinks[node]) > 1:
             for sink in graph.sinks[node]:
                 path = []
                 curr_node = sink
+                
+                # if path_is_io_path(graph, path):
+                #     continue
+
                 while True:
                     path.append((curr_node, len(path)))
                     if len(graph.sinks[curr_node]) != 1:
                         break
                     curr_node = graph.sinks[curr_node][0]
+          
 
                 for idx in range(len(path)):
                     if graph.sparse:
