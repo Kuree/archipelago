@@ -560,6 +560,9 @@ class RoutingResultGraph:
             self.id_to_ports[pe].append('PE_input_width_17_num_0')
             self.id_to_ports[pe].append('PE_input_width_17_num_1')
             self.id_to_ports[pe].append('PE_input_width_17_num_3')
+            self.id_to_ports[pe].append('PE_output_width_17_num_0')
+            self.id_to_ports[pe].append('PE_output_width_17_num_1')
+            self.id_to_ports[pe].append('PE_output_width_17_num_2')
 
 
     def get_tile_at(self, x, y, port):
@@ -764,14 +767,18 @@ def construct_graph(
     for net_id, net in routes.items():
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
+                print("seg1", seg1)
+                print("seg2", seg2)
                 node1 = graph.segment_to_node(seg1, net_id)
                 graph.add_node(node1)
                 node2 = graph.segment_to_node(seg2, net_id)
+                print("node1", node1)
+                print("node2", node2)
                 graph.add_node(node2)
                 graph.add_edge(node1, node2)
 
                 if node1.route_type == RouteType.PORT:
-                    print(node1.x, node1.y, node1.port)
+                    #print(node1.x, node1.y, node1.port)
                     tile_id = graph.get_tile_at(node1.x, node1.y, node1.port)
                     graph.add_edge(graph.get_tile(tile_id), node1)
                 elif node1.route_type == RouteType.REG:
@@ -785,9 +792,9 @@ def construct_graph(
                     graph.add_edge(reg_tile, node1)
 
                 if node2.route_type == RouteType.PORT:
-                    print(node2.x, node2.y)
+                    #print(node2.x, node2.y)
                     tile_id = graph.get_tile_at(node2.x, node2.y, node2.port)
-                    print("tile_id",tile_id)
+                    #print("tile_id",tile_id)
                     graph.add_edge(node2, graph.get_tile(tile_id))
                 elif node2.route_type == RouteType.REG:
                     reg_tile = graph.get_or_create_reg_at(
