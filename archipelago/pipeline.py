@@ -238,18 +238,37 @@ def break_at(graph, node1, id_to_name, placement, routing):
         idx += 1
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
+def is_io_path(graph, node):
+    curr_node = node
+
+    while curr_node not in graph.get_tiles():
+        curr_node = graph.sources[curr_node][0]
+
+    return curr_node in graph.get_input_ios()
+
 
 def exhaustive_pipe(graph, id_to_name, placement, routing):
     for node in graph.nodes:
+        if not (len(graph.sinks[node]) > 1 or node in graph.get_input_ios()):
+            continue
+
+        if is_io_path(graph, node):
+            continue
+
         if node in graph.get_tiles() or len(graph.sinks[node]) > 1:
             for sink in graph.sinks[node]:
                 path = []
                 curr_node = sink
+                
+                # if path_is_io_path(graph, path):
+                #     continue
+
                 while True:
                     path.append((curr_node, len(path)))
                     if len(graph.sinks[curr_node]) != 1:
                         break
                     curr_node = graph.sinks[curr_node][0]
+          
 
                 for idx in range(len(path)):
                     if graph.sparse:
@@ -379,6 +398,8 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing):
             cycles.remove(None)
 
         if len(cycles) > 1:
+            if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
+                continue
             verboseprint(
                 f"\tIncorrect delay within kernel: {node.kernel} {node} {cycles}"
             )
@@ -566,7 +587,6 @@ def calculate_latencies(
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.COMPUTE:
             max_latencies[node.kernel] = node.latency
-
     for node16 in max_latencies:
         for node1 in max_latencies:
             if (
@@ -589,7 +609,7 @@ def calculate_latencies(
                         kernel_latencies[kernel][kernel_port][port_num][
                             "latency"
                         ] = max_latencies[match]
-                    else:
+                    elif d2["pe_port"] != "":
                         found = False
                         for pe in graph.get_tiles():
                             if (
@@ -671,6 +691,23 @@ def update_kernel_latencies(
     matched_kernel_latencies = calculate_latencies(
         graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
     )
+    if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
+        updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
+        ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
+        for kernel, latency_dict in matched_kernel_latencies.items():
+            if "hcompute_output_cgra_stencil" in kernel:
+                for kernel_port, d1 in latency_dict.items():
+                    if "input_cgra_stencil" in kernel_port:
+                        for port_num, d2 in d1.items():
+                            d2["latency"] = updated_kernel_latencies[kernel][kernel_port][port_num]["latency"]
+            if "hcompute_input_cgra_stencil" in kernel:
+                for kernel_port, d1 in latency_dict.items():
+                    for port_num, d2 in d1.items():
+                        d2["latency"] = ub_latencies["input_cgra_stencil"][port_num]["latency"]
+            if "hcompute_kernel_cgra_stencil" in kernel:
+                for kernel_port, d1 in latency_dict.items():
+                    for port_num, d2 in d1.items():
+                        d2["latency"] = min(value["latency"] for value in ub_latencies["kernel_cgra_stencil"].values())
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
     }

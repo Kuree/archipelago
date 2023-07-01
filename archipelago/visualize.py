@@ -85,7 +85,7 @@ def draw_arrow(
     draw.line(xy=xy, fill=color, width=width)
     draw.polygon([(x + dx * len, y + dy * len), lxy, rxy], fill=color)
 
-    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 40
+    pw = (GLOBAL_TILE_WIDTH - 2 * GLOBAL_TILE_MARGIN) / 30
     if source_port:
         xy = [(x - pw, y - pw), (x + pw, y - pw), (x + pw, y + pw), (x - pw, y + pw)]
         draw.polygon(xy=xy, fill="Green", outline="Black", width=1)

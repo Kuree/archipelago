@@ -683,7 +683,7 @@ class RoutingResultGraph:
             if next_node.kernel != None:
                 for net_id, net in netlist.items():
                     for id_ in net[1:]:
-                        if id_[0] == next_node.tile_id and id_[1] == port.port:
+                        if id_[0] == next_node.tile_id and id_[1] == port.port and net[0][0][0] == 'r':
                             resolved = True
                             node.tile_id = net[0][0]
                             node.kernel = self.id_to_name[node.tile_id].split("$")[0]
@@ -731,6 +731,43 @@ class RoutingResultGraph:
 
         for edge in self.edges:
             g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
+
+    def print_graph_tiles_only(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for source in self.get_tiles():
+            if source.tile_id[0] == "r":
+                g.node(str(source), label=f"{source}\n{source.kernel}", shape="box")
+            else:
+                g.node(str(source), label=f"{source}\n{source.kernel}")
+            for dest in self.get_tiles():
+                reachable = False
+                visited = set()
+                queue = []
+                queue.append(source)
+                visited.add(source)
+                while queue:
+                    n = queue.pop()
+
+                    if n == dest and n != source:
+                        reachable = True
+
+                    if n not in self.sinks:
+                        breakpoint()
+                    for node in self.sinks[n]:
+                        if node not in visited:
+                            if isinstance(node, TileNode):
+                                if node == dest:
+                                    reachable = True
+                            else:
+                                queue.append(node)
+                                visited.add(node)
+
+                if reachable:
+                    g.edge(str(source), str(dest))
 
         g.render(filename=filename)
 
