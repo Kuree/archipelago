@@ -94,14 +94,17 @@ def pnr(
     else:
         wave_filename = None
 
-    if os.getenv('CONFIG') == '1':
+
+    if os.getenv('CONFIG') == '0':
+        shutil.copyfile("/aha/matmul_config0", "SIM_DIR/design.packed")
+    elif os.getenv('CONFIG') == '1':
         shutil.copyfile("/aha/matmul_config1", "SIM_DIR/design.packed")
     elif os.getenv('CONFIG') == '2':
         shutil.copyfile("/aha/matmul_config2", "SIM_DIR/design.packed")
-        subprocess.run(["python3", "/aha/prune17.py"])
+        subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config1", "/aha/design.route_config1", "1"])
     elif os.getenv('CONFIG') == '3':
         shutil.copyfile("/aha/matmul_config3", "SIM_DIR/design.packed")
-        subprocess.run(["python3", "/aha/prune17.py"])
+        subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config2", "/aha/design.route_config2", "2"])
 
     shutil.copyfile("/aha/design.id_to_name", "SIM_DIR/design.id_to_name")
 
@@ -168,6 +171,7 @@ def pnr(
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
                     raise PnRException()
+
 
                 try:
                     route(
@@ -261,7 +265,6 @@ def pnr(
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
                     raise PnRException()
-
                 try:
                     route(
                         packed_file,
@@ -314,11 +317,13 @@ def pnr(
         if os.path.isdir(cwd):
             assert cwd_dir is not None
             cwd_dir.__exit__(None, None, None)
-    
+
+
     if os.getenv('CONFIG') == '2':
-        subprocess.run(["python3", "/aha/fix_route.py"])
+        subprocess.run(["python3", "/aha/fix_route.py", "/aha/matmul_config1", "/aha/design.route_config1", "1"])
     elif os.getenv('CONFIG') == '3':
-        subprocess.run(["python3", "/aha/fix_route.py"])
+        subprocess.run(["python3", "/aha/fix_route.py", "/aha/matmul_config2", "/aha/design.route_config2", "2"])
+
 
     routing_result = load_routing_result(route_filename)
 

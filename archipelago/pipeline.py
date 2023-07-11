@@ -99,7 +99,6 @@ def reg_into_route(routes, g_break_node_source, new_reg_route_source):
 
 def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     break_idx = find_break_idx(graph, crit_path)
-
     break_node_source = crit_path[break_idx][0]
     break_node_dest = graph.sinks[break_node_source][0]
 
@@ -145,8 +144,8 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
     id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
 
-    graph.update_sources_and_sinks()
-    graph.update_edge_kernels()
+    #graph.update_sources_and_sinks()
+    #graph.update_edge_kernels()
 
     if graph.sparse:
         break_idx += 3
@@ -195,8 +194,8 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
         placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
         id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
 
-        graph.update_sources_and_sinks()
-        graph.update_edge_kernels()
+        #graph.update_sources_and_sinks()
+        #graph.update_edge_kernels()
 
 
 def break_at(graph, node1, id_to_name, placement, routing):
@@ -248,20 +247,26 @@ def is_io_path(graph, node):
 
 
 def exhaustive_pipe(graph, id_to_name, placement, routing):
+
     for node in graph.nodes:
-        if not (len(graph.sinks[node]) > 1 or node in graph.get_input_ios()):
-            continue
+        #if len(graph.sinks[node]) > 1 or node in graph.get_input_ios():
+        #    continue
 
         if is_io_path(graph, node):
             continue
 
-        if node in graph.get_tiles() or len(graph.sinks[node]) > 1:
+        #if node in graph.get_tiles() and node.tile_type == TileType.REG:
+        #    continue
+
+
+        #if node in graph.get_tiles() or len(graph.sinks[node]) > 1:
+        if True:
+            print(str(node))
+
             for sink in graph.sinks[node]:
                 path = []
                 curr_node = sink
                 
-                # if path_is_io_path(graph, path):
-                #     continue
 
                 while True:
                     path.append((curr_node, len(path)))
@@ -314,6 +319,10 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                                 )
                             except:
                                 print("Skip")
+
+
+    #graph.update_sources_and_sinks()
+    #graph.update_edge_kernels()
 
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
@@ -939,16 +948,31 @@ def pipeline_pnr(
     #freq_file = os.path.join(app_dir, "design.freq")
     #fout = open(freq_file, "w")
     #fout.write(f"{curr_freq}\n")
-    
+   
+    depipe1 = ["e14", "e17", "e22", "e30", "e33", "e38", "e46", "e49", "e54", "e62", "e65", "e70"]
+    depipe2 = ["e14_2", "e17_2", "e22_2", "e30_2", "e33_2", "e38_2", "e46_2", "e49_2", "e54_2", "e62_2", "e65_2", "e70_2"]
+
+    if os.getenv('CONFIG') == '1':
+        depipe = depipe1
+    elif os.getenv('CONFIG') == '2':
+        depipe = depipe2
+
+    new_route = []
     # KALHAN MANUAL EDIT
-    if os.getenv('CONFIG') == '2':
-        for route in routing["e8_2"][0]:
-            for seg in route:
-                if seg == "REG":
-                    routing["e8_2"][0].remove(route)
+    if os.getenv('CONFIG') == '1' or os.getenv('CONFIG') == '2':
+        for pipe_route in depipe:
+            if pipe_route in routing:
+                for route in routing[pipe_route][0]:
+                    if not route[0]  == "REG":
+                        #routing[pipe_route][0].remove(route)
+                        new_route.append(route)
+                routing[pipe_route][0] = new_route
+                new_route = []
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)
     dump_id_to_name(app_dir, id_to_name)
+
+    print("exiting pipelining")
 
     return placement, routing, id_to_name
