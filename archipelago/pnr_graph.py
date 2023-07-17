@@ -537,88 +537,20 @@ class RoutingResultGraph:
                 self.placement[place] = []
             self.placement[place].append(blk_id)
 
-        num_pes = int(os.getenv("PES"))
-        pe_list = []
-        for pe in range(num_pes):
-            pe_num = 100+pe
-            pe_list.append(f'p{pe_num}')
-
-        # KALHAN MANUAL EDIT
         for net_id, conns in netlist.items():
             for conn in conns:
                 if conn[0] not in self.id_to_ports:
                     self.id_to_ports[conn[0]] = []
                 self.id_to_ports[conn[0]].append(conn[1])
-                if (conn[0] + "_2") not in self.id_to_ports:
-                    self.id_to_ports[conn[0]+"_2"] = []
-                self.id_to_ports[conn[0]+"_2"].append(conn[1])
 
-        self.id_to_ports["I28_2"].append("io2f_1")
-        self.id_to_ports["m29_2"].append("flush")
-        self.id_to_ports["m30_2"].append("flush")
-        self.id_to_ports["m33_2"].append("flush")
-        self.id_to_ports["m34_2"].append("flush")
-        self.id_to_ports["m37_2"].append("flush")
-        self.id_to_ports["m38_2"].append("flush")
-        self.id_to_ports["m41_2"].append("flush")
-        self.id_to_ports["m42_2"].append("flush")
-        self.id_to_ports["m43_2"].append("flush")
-        self.id_to_ports["m46_2"].append("flush")
-        self.id_to_ports["m47_2"].append("flush")
-        self.id_to_ports["m49_2"].append("flush")
-        self.id_to_ports["m50_2"].append("flush")
-        self.id_to_ports["m53_2"].append("flush")
-        self.id_to_ports["m54_2"].append("flush")
-        self.id_to_ports["m55_2"].append("flush")
-        self.id_to_ports["m58_2"].append("flush")
-        self.id_to_ports["m59_2"].append("flush")
-        self.id_to_ports["m61_2"].append("flush")
-        self.id_to_ports["m62_2"].append("flush")
-        self.id_to_ports["m65_2"].append("flush")
-        self.id_to_ports["m66_2"].append("flush")
-        self.id_to_ports["m67_2"].append("flush")
-        self.id_to_ports["m70_2"].append("flush")
-        self.id_to_ports["m71_2"].append("flush")
-        self.id_to_ports["m73_2"].append("flush")
-        self.id_to_ports["m74_2"].append("flush")
-        self.id_to_ports["m77_2"].append("flush")
-        self.id_to_ports["m79_2"].append("flush")
-        self.id_to_ports["m81_2"].append("flush")
-        self.id_to_ports["m82_2"].append("flush")
-        self.id_to_ports["m84_2"].append("flush")
-        self.id_to_ports["m85_2"].append("flush")
-        self.id_to_ports["m87_2"].append("flush")
-        self.id_to_ports["m88_2"].append("flush")
-        self.id_to_ports["m90_2"].append("flush")
-        self.id_to_ports["p0_2"].append("flush")
-        self.id_to_ports["p1_2"].append("flush")
-        self.id_to_ports["p10_2"].append("flush")
-        self.id_to_ports["p11_2"].append("flush")
-        self.id_to_ports["p12_2"].append("flush")
-        self.id_to_ports["p13_2"].append("flush")
-        self.id_to_ports["p14_2"].append("flush")
-        self.id_to_ports["p15_2"].append("flush")
-        self.id_to_ports["p16_2"].append("flush")
-        self.id_to_ports["p17_2"].append("flush")
-        self.id_to_ports["p18_2"].append("flush")
-        self.id_to_ports["p19_2"].append("flush")
-        self.id_to_ports["p2_2"].append("flush")
-        self.id_to_ports["p20_2"].append("flush")
-        self.id_to_ports["p21_2"].append("flush")
-        self.id_to_ports["p22_2"].append("flush")
-        self.id_to_ports["p23_2"].append("flush")
-        self.id_to_ports["p24_2"].append("flush")
-        self.id_to_ports["p25_2"].append("flush")
-        self.id_to_ports["p26_2"].append("flush")
-        self.id_to_ports["p27_2"].append("flush")
-        self.id_to_ports["p3_2"].append("flush")
-        self.id_to_ports["p4_2"].append("flush")
-        self.id_to_ports["p5_2"].append("flush")
-        self.id_to_ports["p6_2"].append("flush")        
-        self.id_to_ports["p7_2"].append("flush")
-        self.id_to_ports["p8_2"].append("flush")
-        self.id_to_ports["p9_2"].append("flush")
+        self.id_to_ports['I0'] = []
+        self.id_to_ports['I0'].append('io2f_17')
 
+        num_pes = int(os.getenv("PES"))
+        pe_list = []
+        for pe in range(num_pes):
+            pe_num = 1000+pe
+            pe_list.append(f'p{pe_num}')
         
         for pe in pe_list:
             self.id_to_ports[pe] = []
@@ -687,7 +619,7 @@ class RoutingResultGraph:
 
         for node in self.nodes:
             node.update_tile_id()
-            assert node.kernel is not None, node
+            #assert node.kernel is not None, breakpoint()
 
     def fix_regs(self, netlist):
         for tile in self.get_tiles():

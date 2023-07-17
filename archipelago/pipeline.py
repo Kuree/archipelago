@@ -949,17 +949,12 @@ def pipeline_pnr(
     #fout = open(freq_file, "w")
     #fout.write(f"{curr_freq}\n")
    
-    depipe1 = ["e14", "e17", "e22", "e30", "e33", "e38", "e46", "e49", "e54", "e62", "e65", "e70"]
-    depipe2 = ["e14_2", "e17_2", "e22_2", "e30_2", "e33_2", "e38_2", "e46_2", "e49_2", "e54_2", "e62_2", "e65_2", "e70_2"]
+    depipe = ['e5', 'e8', 'e13']
 
-    if os.getenv('CONFIG') == '1':
-        depipe = depipe1
-    elif os.getenv('CONFIG') == '2':
-        depipe = depipe2
 
     new_route = []
     # KALHAN MANUAL EDIT
-    if os.getenv('CONFIG') == '1' or os.getenv('CONFIG') == '2':
+    if int(os.getenv('CONFIG')) > 0:
         for pipe_route in depipe:
             if pipe_route in routing:
                 for route in routing[pipe_route][0]:

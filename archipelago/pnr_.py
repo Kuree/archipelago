@@ -95,18 +95,28 @@ def pnr(
         wave_filename = None
 
 
-    if os.getenv('CONFIG') == '0':
-        shutil.copyfile("/aha/matmul_config0", "SIM_DIR/design.packed")
-    elif os.getenv('CONFIG') == '1':
-        shutil.copyfile("/aha/matmul_config1", "SIM_DIR/design.packed")
-    elif os.getenv('CONFIG') == '2':
-        shutil.copyfile("/aha/matmul_config2", "SIM_DIR/design.packed")
-        subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config1", "/aha/design.route_config1", "1"])
-    elif os.getenv('CONFIG') == '3':
-        shutil.copyfile("/aha/matmul_config3", "SIM_DIR/design.packed")
-        subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config2", "/aha/design.route_config2", "2"])
+    #if os.getenv('CONFIG') == '0':
+    #    shutil.copyfile("/aha/matmul_config0", "SIM_DIR/design.packed")
+    #    shutil.copyfile("/aha/id0", "SIM_DIR/design.id_to_name")
+    #elif os.getenv('CONFIG') == '1':
+    #    shutil.copyfile("/aha/matmul_config1", "SIM_DIR/design.packed")
+    #    shutil.copyfile("/aha/id0", "SIM_DIR/design.id_to_name")
+    #    subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config0", "/aha/design.route_config0", "0"])
+    #elif os.getenv('CONFIG') == '2':
+    #    shutil.copyfile("/aha/matmul_config2", "SIM_DIR/design.packed")
+    #    shutil.copyfile("/aha/id0", "SIM_DIR/design.id_to_name")
+    #    subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config1", "/aha/design.route_config1", "1"])
+    #elif os.getenv('CONFIG') == '3':
+    #    shutil.copyfile("/aha/matmul_config3", "SIM_DIR/design.packed")
+    #    shutil.copyfile("/aha/id0", "SIM_DIR/design.id_to_name")
 
-    shutil.copyfile("/aha/design.id_to_name", "SIM_DIR/design.id_to_name")
+
+    shutil.copyfile("/aha/matmul_config"+os.getenv('CONFIG'), '/aha/SIM_DIR/design.packed')
+    shutil.copyfile("/aha/id0", "SIM_DIR/design.id_to_name")
+
+    if int(os.getenv('CONFIG')) > 0:
+        subprocess.run(["python3", "/aha/prune17.py", "/aha/matmul_config0", "/aha/design.route_config0", "0"])
+
 
     if id_to_name is None:
         id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
@@ -171,7 +181,6 @@ def pnr(
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
                     raise PnRException()
-
 
                 try:
                     route(
@@ -319,10 +328,8 @@ def pnr(
             cwd_dir.__exit__(None, None, None)
 
 
-    if os.getenv('CONFIG') == '2':
-        subprocess.run(["python3", "/aha/fix_route.py", "/aha/matmul_config1", "/aha/design.route_config1", "1"])
-    elif os.getenv('CONFIG') == '3':
-        subprocess.run(["python3", "/aha/fix_route.py", "/aha/matmul_config2", "/aha/design.route_config2", "2"])
+    if int(os.getenv('CONFIG')) > 0:
+        subprocess.run(["python3", "/aha/fix_route.py", "/aha/matmul_config0", "/aha/design.route_config0", "0"])
 
 
     routing_result = load_routing_result(route_filename)
@@ -337,6 +344,14 @@ def pnr(
         if wave_filename is not None:
             shutil.copy2(wave_filename, copy_to_dir)
 
+    shutil.copyfile("/aha/SIM_DIR/design.route", "/aha/design.route_config"+os.getenv('CONFIG'))
+    shutil.copyfile("/aha/SIM_DIR/design.packed", "/aha/design.packed_config"+os.getenv('CONFIG'))
+    try:
+        subprocess.run(["python3", "/aha/archipelago/archipelago/sta.py", "-a", "/aha/SIM_DIR", "-v", "-s"])
+    except:
+        print("TODO sta error")
+    
+    shutil.copyfile("/aha/SIM_DIR/pnr_result_17.png", "/aha/config"+os.getenv('CONFIG')+".png")
 
     return placement_result, routing_result, id_to_name
 
