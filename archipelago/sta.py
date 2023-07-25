@@ -45,21 +45,20 @@ class PathComponents:
         )
 
     def get_total(self):
-        if sum(self.sb_delay) > sum(self.sb_delay_rv):
-            total = 0
-            total += self.glbs * self.delays["glb"]
-            total += self.pes * self.delays["pe"]
-            total += self.mems * self.delays["mem"]
-            total += self.rmux * self.delays["rmux"]
-            total += sum(self.sb_delay)
-            total -= sum(self.sb_clk_delay)
-        else:
-            total = 0
-            total += self.glbs * self.delays["glb"]
-            total += self.rmux * self.delays["rmux"]
-            total += sum(self.sb_delay_rv)
-            total -= sum(self.sb_clk_delay)
-        return total
+        total_dense = 0
+        total_dense += self.glbs * self.delays["glb"]
+        total_dense += self.pes * self.delays["pe"]
+        total_dense += self.mems * self.delays["mem"]
+        total_dense += self.rmux * self.delays["rmux"]
+        total_dense += sum(self.sb_delay)
+        total_dense -= sum(self.sb_clk_delay)
+
+        total_rv = 0
+        total_rv += self.glbs * self.delays["glb"]
+        total_rv += self.rmux * self.delays["rmux"]
+        total_rv += sum(self.sb_delay_rv)
+        total_rv -= sum(self.sb_clk_delay)
+        return max(total_dense, total_rv)
 
     def print(self):
         print("\t\tGlbs:", self.glbs)
@@ -249,27 +248,19 @@ def sta(graph):
                 comp.parent = parent
 
             if isinstance(node, TileNode):
-                if node.tile_type == TileType.PE:
-                    comp.pes += 1
-                elif node.tile_type == TileType.MEM:
-                    comp.mems += 1
-                elif node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1:
-                    comp.glbs += 1
+                if node.input_port_break_path[parent.port]:
+                    comp = PathComponents()
             else:
-                if len(graph.sinks[node]) == 0:
-                    continue
-
-                if node.route_type == RouteType.PORT and isinstance(
-                    graph.sinks[node][0], TileNode
-                ):
-                    if graph.sinks[node][0].input_port_break_path[node.port]:
-                        comp = PathComponents()
-
-                elif node.route_type == RouteType.REG and isinstance(
-                    graph.sinks[node][0], TileNode
-                ):
-                    if graph.sinks[node][0].input_port_break_path["reg"]:
-                        comp = PathComponents()
+                if node.route_type == RouteType.PORT and isinstance(parent, TileNode):
+                    if parent.tile_type == TileType.PE:
+                        comp.pes += 1
+                    elif parent.tile_type == TileType.MEM:
+                        comp.mems += 1
+                    elif (
+                        parent.tile_type == TileType.IO16
+                        or parent.tile_type == TileType.IO1
+                    ):
+                        comp.glbs += 1
 
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(
@@ -280,6 +271,7 @@ def sta(graph):
                     if graph.sparse:
                         calc_fifo_to_out(graph, node, parent, comp, mem_tile_column)
                     else:
+                        # Make sure to check this later, not sure if we only want to count rmux when reg is used
                         if (
                             isinstance(parent, RouteNode)
                             and parent.route_type == RouteType.REG
