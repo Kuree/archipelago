@@ -555,6 +555,21 @@ def find_closest_match(kernel_target, candidates):
 
     print("No match for", kernel_target)
 
+def find_stencil_valid_mem(graph, kernel):
+    for node in graph.nodes:
+        if node.kernel == kernel:
+            break
+
+    curr_node = node
+
+    while True:
+        if isinstance(curr_node, TileNode) and curr_node.tile_type == TileType.MEM:
+            return curr_node
+
+        if len(graph.sources[curr_node]) == 0:
+            return None
+
+        curr_node = graph.sources[curr_node][0]
 
 def calculate_latencies(
     graph, kernel_graph, node_latencies, kernel_latencies, port_remap
@@ -568,6 +583,9 @@ def calculate_latencies(
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.COMPUTE:
             max_latencies[node.kernel] = node.latency
+
+    stencil_valid_adjust = {}
+
     for node16 in max_latencies:
         for node1 in max_latencies:
             if (
@@ -575,9 +593,16 @@ def calculate_latencies(
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
+                # Need to absorb the added latency of the stencil valids into either the compute kernel or the stencil valid schedule generator
                 max_latencies[node16] -= max_latencies[node1]
                 max_latencies[node1] = 0
-                assert max_latencies[node16] >= 0, f"{node16} latency is negative"
+
+                if max_latencies[node16] < 0:
+                    stencil_valid_mem = find_stencil_valid_mem(graph, node1)
+                    # need to adjust stencil valid latency
+                    stencil_valid_adjust[stencil_valid_mem.kernel] = max_latencies[node16]
+                    max_latencies[node16] = 0
+
 
     for kernel, latency_dict in kernel_latencies.items():
         if "_glb_" in kernel:
@@ -617,7 +642,7 @@ def calculate_latencies(
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
 
-    return kernel_latencies
+    return kernel_latencies, stencil_valid_adjust
 
 
 def update_kernel_latencies(
@@ -626,6 +651,7 @@ def update_kernel_latencies(
     id_to_name,
     placement,
     routing,
+    existing_kernel_latencies,
     harden_flush,
     pipeline_config_interval,
     pes_with_packed_ponds,
@@ -640,7 +666,13 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
+    kernel_graph.print_graph("/aha/kernels_pre")
+
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
+
+    kernel_graph.print_graph("/aha/kernels_post")
+
+    graph.print_graph("/aha/graph")
 
     # branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
@@ -654,22 +686,10 @@ def update_kernel_latencies(
                 node.latency >= 0
             ), f"{node.kernel} has negative compute kernel latency"
 
-    kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
-    flush_latencies_file = kernel_latencies_file.replace(
-        "compute_kernel_latencies", "flush_latencies"
-    )
-    pond_latencies_file = kernel_latencies_file.replace(
-        "compute_kernel_latencies", "pond_latencies"
-    )
-
-    assert os.path.exists(kernel_latencies_file)
-
-    f = open(kernel_latencies_file, "r")
-    existing_kernel_latencies = json.load(f)
 
     port_remap = json.load(open(f"{dir_name}/design.port_remap"))
 
-    matched_kernel_latencies = calculate_latencies(
+    matched_kernel_latencies, stencil_valid_adjust = calculate_latencies(
         graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
     )
     if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
@@ -699,6 +719,19 @@ def update_kernel_latencies(
             if port != "flush":
                 pond_latencies[id_to_name[pond_node.tile_id]] = lat
 
+    kernel_latencies_file = glob.glob(f"{dir_name}/*_compute_kernel_latencies.json")[0]
+
+    flush_latencies_file = kernel_latencies_file.replace(
+        "compute_kernel_latencies", "flush_latencies"
+    )
+    pond_latencies_file = kernel_latencies_file.replace(
+        "compute_kernel_latencies", "pond_latencies"
+    )
+    stencil_valid_latencies_file = kernel_latencies_file.replace(
+        "compute_kernel_latencies", "stencil_valid_latencies"
+    )
+
+
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(matched_kernel_latencies, indent=4))
 
@@ -707,6 +740,9 @@ def update_kernel_latencies(
 
     fout = open(pond_latencies_file, "w")
     fout.write(json.dumps(pond_latencies, indent=4))
+
+    fout = open(stencil_valid_latencies_file, "w")
+    fout.write(json.dumps(stencil_valid_adjust, indent=4))
 
 
 def segment_node_to_string(node):
@@ -784,6 +820,8 @@ def pipeline_pnr(
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)
+    kernel_latencies_file = glob.glob(f"{app_dir}/*_compute_kernel_latencies.json")[0]
+    existing_kernel_latencies = json.load(open(kernel_latencies_file, "r"))
 
     if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
         pe_cycles = int(os.environ["PIPELINED"])
@@ -800,11 +838,14 @@ def pipeline_pnr(
         routing,
         id_to_name,
         netlist,
+        existing_kernel_latencies,
         pe_latency=pe_cycles,
         pond_latency=0,
         io_latency=io_cycles,
         sparse=sparse,
     )
+
+    graph.print_graph("/aha/graph_pre")
 
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
@@ -815,6 +856,7 @@ def pipeline_pnr(
         id_to_name,
         placement,
         routing,
+        existing_kernel_latencies,
         harden_flush,
         pipeline_config_interval,
         pes_with_packed_ponds,
@@ -840,6 +882,7 @@ def pipeline_pnr(
                     id_to_name,
                     placement,
                     routing,
+                    existing_kernel_latencies,
                     harden_flush,
                     pipeline_config_interval,
                     pes_with_packed_ponds,
@@ -863,6 +906,7 @@ def pipeline_pnr(
             routing,
             id_to_name,
             netlist,
+            existing_kernel_latencies,
             pe_latency=pe_cycles,
             pond_latency=0,
             io_latency=io_cycles,
@@ -876,6 +920,7 @@ def pipeline_pnr(
             id_to_name,
             placement,
             routing,
+            existing_kernel_latencies,
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
@@ -892,6 +937,7 @@ def pipeline_pnr(
             id_to_name,
             placement,
             routing,
+            existing_kernel_latencies,
             harden_flush,
             pipeline_config_interval,
             pes_with_packed_ponds,
