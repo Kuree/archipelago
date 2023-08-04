@@ -572,13 +572,11 @@ def find_stencil_valid_mem(graph, kernel):
         curr_node = graph.sources[curr_node][0]
 
 def calculate_latencies(
-    graph, kernel_graph, node_latencies, kernel_latencies, port_remap
+    graph, kernel_graph, node_latencies, kernel_latencies, port_remap, instance_to_instr
 ):
     port_remap_r = {v: k for k, v in port_remap.items()}
 
-    nodes = kernel_graph.topological_sort()
     max_latencies = {}
-    flush_latencies = {}
 
     for node in kernel_graph.nodes:
         if node.kernel_type == KernelNodeType.COMPUTE:
@@ -593,9 +591,16 @@ def calculate_latencies(
                 and node16.split("_write")[0].replace("io16", "io1")
                 == node1.split("_write")[0]
             ):
+                max_diff = -(max_latencies[node16] + 2)
+
+                print("max diff", max_diff, max_latencies[node16], max_latencies[node1])
+
                 # Need to absorb the added latency of the stencil valids into either the compute kernel or the stencil valid schedule generator
                 max_latencies[node16] -= max_latencies[node1]
                 max_latencies[node1] = 0
+
+                if max_latencies[node16] < max_diff:
+                    raise Exception(f"Can't absorb stencil valid latency of {max_latencies[node16]} into compute kernel")
 
                 if max_latencies[node16] < 0:
                     stencil_valid_mem = find_stencil_valid_mem(graph, node1)
@@ -653,6 +658,7 @@ def update_kernel_latencies(
     routing,
     existing_kernel_latencies,
     harden_flush,
+    instance_to_instr,
     pipeline_config_interval,
     pes_with_packed_ponds,
     sparse,
@@ -666,13 +672,7 @@ def update_kernel_latencies(
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
-    kernel_graph.print_graph("/aha/kernels_pre")
-
     branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routing)
-
-    kernel_graph.print_graph("/aha/kernels_post")
-
-    graph.print_graph("/aha/graph")
 
     # branch_delay_match_all_nodes(graph, id_to_name, placement, routing)
 
@@ -690,7 +690,7 @@ def update_kernel_latencies(
     port_remap = json.load(open(f"{dir_name}/design.port_remap"))
 
     matched_kernel_latencies, stencil_valid_adjust = calculate_latencies(
-        graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
+        graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap, instance_to_instr
     )
     if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
         updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
@@ -807,6 +807,7 @@ def pipeline_pnr(
     netlist,
     load_only,
     harden_flush,
+    instance_to_instr,
     pipeline_config_interval,
     pes_with_packed_ponds,
     sparse,
@@ -845,8 +846,6 @@ def pipeline_pnr(
         sparse=sparse,
     )
 
-    graph.print_graph("/aha/graph_pre")
-
     print("\nApplication Frequency:")
     curr_freq, crit_path, crit_nets = sta(graph)
 
@@ -858,6 +857,7 @@ def pipeline_pnr(
         routing,
         existing_kernel_latencies,
         harden_flush,
+        instance_to_instr,
         pipeline_config_interval,
         pes_with_packed_ponds,
         sparse,
@@ -884,6 +884,7 @@ def pipeline_pnr(
                     routing,
                     existing_kernel_latencies,
                     harden_flush,
+                    instance_to_instr,
                     pipeline_config_interval,
                     pes_with_packed_ponds,
                     sparse,
@@ -922,6 +923,7 @@ def pipeline_pnr(
             routing,
             existing_kernel_latencies,
             harden_flush,
+            instance_to_instr,
             pipeline_config_interval,
             pes_with_packed_ponds,
             sparse,
@@ -939,6 +941,7 @@ def pipeline_pnr(
             routing,
             existing_kernel_latencies,
             harden_flush,
+            instance_to_instr,
             pipeline_config_interval,
             pes_with_packed_ponds,
             sparse,
@@ -961,6 +964,8 @@ def pipeline_pnr(
         print(
             "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
         )
+
+
 
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")

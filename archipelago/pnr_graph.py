@@ -883,7 +883,6 @@ def construct_graph(
         tile.input_port_break_path["output"] = io_latency != 0
 
     graph.update_sources_and_sinks()
-    graph.print_graph("/aha/before_edge_kernels")
     graph.update_edge_kernels()
 
     while graph.fix_cycles():
