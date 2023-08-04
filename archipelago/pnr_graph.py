@@ -835,7 +835,7 @@ def construct_graph(
                     tile.input_port_break_path[port] = pe_latency != 0
                 elif tile.tile_type == TileType.MEM:
                     if "rom_" in id_to_name[tile_id]:
-                        tile.input_port_latencies[port] = 1
+                        tile.input_port_latencies[port] = 2
                         tile.input_port_break_path[port] = True
                     elif "flush" in port:
                         tile.input_port_latencies[port] = 0
