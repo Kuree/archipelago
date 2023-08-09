@@ -31,15 +31,15 @@ class PathComponents:
         available_regs=0,
         parent=None,
     ):
-        self.glbs = glbs
-        self.sb_delay = sb_delay
-        self.sb_delay_rv = sb_delay_rv
-        self.sb_clk_delay = sb_clk_delay
-        self.pes = pes
-        self.mems = mems
-        self.rmux = rmux
-        self.available_regs = available_regs
-        self.parent = parent
+        self.glbs = 0
+        self.sb_delay = []
+        self.sb_delay_rv = []
+        self.sb_clk_delay = []
+        self.pes = 0
+        self.mems = 0
+        self.rmux = 0
+        self.available_regs = 0
+        self.parent = None
         self.delays = json.load(
             open(os.path.dirname(os.path.realpath(__file__)) + "/sta_delays.json")
         )
@@ -260,7 +260,10 @@ def sta(graph):
                         parent.tile_type == TileType.IO16
                         or parent.tile_type == TileType.IO1
                     ):
-                        comp.glbs += 1
+                        if parent.input_port_break_path["output"]:
+                            comp = PathComponents()
+                            comp.sb_delay_rv.append(300)
+                            comp.sb_delay_rv.append(600)
 
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(
@@ -279,13 +282,7 @@ def sta(graph):
                             comp.rmux += 1
                         if parent.route_type != RouteType.REG:
                             comp.available_regs += 1
-                elif (
-                    node.route_type == RouteType.PORT
-                    and isinstance(parent, TileNode)
-                    and parent.tile_type == TileType.IO16
-                ):
-                    comp.sb_delay_rv.append(300)
-                    comp.sb_delay_rv.append(635)
+
 
             components.append(comp)
 
