@@ -19,25 +19,16 @@ from archipelago.visualize import visualize_pnr
 
 
 class PathComponents:
-    def __init__(
-        self,
-        glbs=0,
-        sb_delay=[],
-        sb_delay_rv=[],
-        sb_clk_delay=[],
-        pes=0,
-        mems=0,
-        rmux=0,
-        available_regs=0,
-        parent=None,
-    ):
+    def __init__(self):
         self.glbs = 0
         self.sb_delay = []
-        self.sb_delay_rv = []
+        self.sb_delay_ready = []
+        self.sb_delay_valid = []
         self.sb_clk_delay = []
         self.pes = 0
         self.mems = 0
         self.rmux = 0
+        self.ready_and = 0
         self.available_regs = 0
         self.parent = None
         self.delays = json.load(
@@ -53,24 +44,35 @@ class PathComponents:
         total_dense += sum(self.sb_delay)
         total_dense -= sum(self.sb_clk_delay)
 
-        total_rv = 0
-        total_rv += self.glbs * self.delays["glb"]
-        total_rv += self.rmux * self.delays["rmux"]
-        total_rv += sum(self.sb_delay_rv)
-        total_rv -= sum(self.sb_clk_delay)
-        return max(total_dense, total_rv)
+        total_ready = 0
+        total_ready += self.glbs * self.delays["glb"]
+        total_ready += self.rmux * self.delays["rmux"]
+        total_ready += sum(self.sb_delay_ready)
+        total_ready += self.ready_and
+        total_ready -= sum(self.sb_clk_delay)
+
+        total_valid = 0
+        total_valid += self.glbs * self.delays["glb"]
+        total_valid += self.rmux * self.delays["rmux"]
+        total_valid += sum(self.sb_delay_valid)
+        total_valid -= sum(self.sb_clk_delay)
+
+        return max(total_dense, total_ready, total_valid)
 
     def print(self):
         print("\t\tGlbs:", self.glbs)
         print("\t\tPEs:", self.pes)
         print("\t\tMems:", self.mems)
         print("\t\tRmux:", self.rmux)
-        print("\t\tSB delay:", sum(self.sb_delay), "ps")
-        print("\t\tSB delay:", self.sb_delay, "ps")
-        print("\t\tSB delay ready-valid:", sum(self.sb_delay_rv), "ps")
-        print("\t\tSB delay ready-valid:", self.sb_delay_rv, "ps")
-        print("\t\tSB clk delay:", sum(self.sb_clk_delay), "ps")
-        print("\t\tSB clk delay:", self.sb_clk_delay, "ps")
+        print(f"\t\tSB clk delay: {self.sb_clk_delay} = {sum(self.sb_clk_delay)} ps")
+        print(f"\t\tSB delay: {self.sb_delay} = {sum(self.sb_delay)} ps")
+        print(
+            f"\t\tSB delay valid: {self.sb_delay_valid} = {sum(self.sb_delay_valid)} ps"
+        )
+        print(
+            f"\t\tSB delay ready: {self.sb_delay_ready} = {sum(self.sb_delay_ready)} ps"
+        )
+        print("\t\tReady-and:", self.ready_and)
 
 
 def get_mem_tile_columns(graph):
@@ -96,10 +98,24 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
         if graph.sinks[node][0].route_type == RouteType.PORT:
             if "MEM" in graph.sinks[node][0].port:
                 comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM_fifo"])
-                comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_MEM_fifo_valid"])
+                comp.sb_delay_valid.append(comp.delays[f"SB_IN_to_MEM_fifo_valid"])
+                comp.sb_delay_ready.append(comp.delays[f"prim_fifo_ready_gen_mem"])
             else:
                 comp.sb_delay.append(comp.delays[f"SB_IN_to_PE_fifo"])
-                comp.sb_delay_rv.append(comp.delays[f"SB_IN_to_PE_fifo_valid"])
+                comp.sb_delay_valid.append(comp.delays[f"SB_IN_to_PE_fifo_valid"])
+                comp.sb_delay_ready.append(comp.delays[f"prim_fifo_ready_gen_pe"])
+
+        elif graph.sinks[node][0].route_type == RouteType.REG:
+            if (node.x + 1) % mem_column == 0:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_MEM_split_fifo"])
+                comp.sb_delay_valid.append(
+                    comp.delays[f"SB_IN_to_MEM_split_fifo_valid"]
+                )
+                comp.sb_delay_ready.append(comp.delays[f"split_fifo_ready_gen_mem"])
+            else:
+                comp.sb_delay.append(comp.delays[f"SB_IN_to_PE_split_fifo"])
+                comp.sb_delay_valid.append(comp.delays[f"SB_IN_to_PE_split_fifo_valid"])
+                comp.sb_delay_ready.append(comp.delays[f"split_fifo_ready_gen_pe"])
     else:
         if graph.sinks[node][0].route_type == RouteType.PORT:
             if "MEM" in graph.sinks[node][0].port:
@@ -168,26 +184,26 @@ def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
 
         if sparse:
             if (parent.x + 1) % mem_column == 0:
-                comp.sb_delay_rv.append(
+                comp.sb_delay_valid.append(
                     comp.delays[
                         f"MEM_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
             else:
-                comp.sb_delay_rv.append(
+                comp.sb_delay_valid.append(
                     comp.delays[
                         f"PE_B{parent.bit_width}_valid_{side_to_dir[parent.side]}_{side_to_dir[next_sb.side]}"
                     ]
                 )
 
             if (parent.x + 1) % mem_column == 0:
-                comp.sb_delay_rv.append(
+                comp.sb_delay_ready.append(
                     comp.delays[
                         f"MEM_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
                     ]
                 )
             else:
-                comp.sb_delay_rv.append(
+                comp.sb_delay_ready.append(
                     comp.delays[
                         f"PE_B{parent.bit_width}_ready_{side_to_dir[next_sb.side]}_{side_to_dir[parent.side]}"
                     ]
@@ -215,12 +231,12 @@ def calc_fifo_to_out(graph, node, parent, comp, mem_tile_column):
 
         comp.sb_delay.append(comp.delays[f"{prefix}_fifo_to_sb_out_{tile_suffix}"])
 
-        comp.sb_delay_rv.append(
-            comp.delays[f"{prefix}_fifo_to_sb_out_{tile_suffix}_ready"]
+        comp.sb_delay_valid.append(
+            comp.delays[f"{prefix}_fifo_to_sb_out_{tile_suffix}"]
         )
 
         # Ready and-ing logic to produce valid
-        comp.sb_delay_rv.append(comp.delays[f"ready_and_valid_{tile_suffix}"])
+        comp.ready_and = comp.delays[f"ready_and_valid_{tile_suffix}"]
 
 
 def sta(graph):
@@ -253,17 +269,19 @@ def sta(graph):
             else:
                 if node.route_type == RouteType.PORT and isinstance(parent, TileNode):
                     if parent.tile_type == TileType.PE:
-                        comp.pes += 1
+                        if not graph.sparse:
+                            comp.pes += 1
                     elif parent.tile_type == TileType.MEM:
-                        comp.mems += 1
+                        if not graph.sparse:
+                            comp.mems += 1
                     elif (
                         parent.tile_type == TileType.IO16
                         or parent.tile_type == TileType.IO1
                     ):
                         if parent.input_port_break_path["output"]:
                             comp = PathComponents()
-                            comp.sb_delay_rv.append(300)
-                            comp.sb_delay_rv.append(600)
+                            comp.sb_delay_ready.append(300)
+                            comp.sb_delay_valid.append(600)
 
                 elif node.route_type == RouteType.SB:
                     calc_sb_delay(
@@ -282,7 +300,6 @@ def sta(graph):
                             comp.rmux += 1
                         if parent.route_type != RouteType.REG:
                             comp.available_regs += 1
-
 
             components.append(comp)
 

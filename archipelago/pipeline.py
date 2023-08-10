@@ -673,22 +673,31 @@ def update_kernel_latencies(
         graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap
     )
     if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
-        updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
+        updated_kernel_latencies = json.load(
+            open(f"{dir_name}/updated_kernel_latencies.json")
+        )
         ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
         for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_output_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     if "input_cgra_stencil" in kernel_port:
                         for port_num, d2 in d1.items():
-                            d2["latency"] = updated_kernel_latencies[kernel][kernel_port][port_num]["latency"]
+                            d2["latency"] = updated_kernel_latencies[kernel][
+                                kernel_port
+                            ][port_num]["latency"]
             if "hcompute_input_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     for port_num, d2 in d1.items():
-                        d2["latency"] = ub_latencies["input_cgra_stencil"][port_num]["latency"]
+                        d2["latency"] = ub_latencies["input_cgra_stencil"][port_num][
+                            "latency"
+                        ]
             if "hcompute_kernel_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     for port_num, d2 in d1.items():
-                        d2["latency"] = min(value["latency"] for value in ub_latencies["kernel_cgra_stencil"].values())
+                        d2["latency"] = min(
+                            value["latency"]
+                            for value in ub_latencies["kernel_cgra_stencil"].values()
+                        )
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
     }

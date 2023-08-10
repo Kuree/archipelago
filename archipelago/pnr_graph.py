@@ -660,7 +660,11 @@ class RoutingResultGraph:
             if next_node.kernel != None:
                 for net_id, net in netlist.items():
                     for id_ in net[1:]:
-                        if id_[0] == next_node.tile_id and id_[1] == port.port and net[0][0][0] == 'r':
+                        if (
+                            id_[0] == next_node.tile_id
+                            and id_[1] == port.port
+                            and net[0][0][0] == "r"
+                        ):
                             resolved = True
                             node.tile_id = net[0][0]
                             node.kernel = self.id_to_name[node.tile_id].split("$")[0]

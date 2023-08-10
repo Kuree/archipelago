@@ -6,13 +6,15 @@
 
     "prim_fifo_to_sb_out_pe": 486,
     "prim_fifo_to_sb_out_mem": 826,
+
     "split_fifo_to_sb_out_pe": 467,
     "split_fifo_to_sb_out_mem": 421,
 
-    "prim_fifo_to_sb_out_pe_ready": 463,
-    "prim_fifo_to_sb_out_mem_ready": 635,
-    "split_fifo_to_sb_out_pe_ready": 329,
-    "split_fifo_to_sb_out_mem_ready": 397,
+    "prim_fifo_ready_gen_pe": 463,
+    "prim_fifo_ready_gen_mem": 635,
+
+    "split_fifo_ready_gen_pe": 329,
+    "split_fifo_ready_gen_mem": 397,
 
     "SB_IN_to_MEM": 400,
     "SB_IN_to_PE": 240,
@@ -20,8 +22,14 @@
     "SB_IN_to_MEM_fifo": 490,
     "SB_IN_to_PE_fifo": 450,
 
+    "SB_IN_to_MEM_split_fifo": 490,
+    "SB_IN_to_PE_split_fifo": 450,
+
     "SB_IN_to_MEM_fifo_valid": 487,
     "SB_IN_to_PE_fifo_valid": 450,
+
+    "SB_IN_to_MEM_split_fifo_valid": 487,
+    "SB_IN_to_PE_split_fifo_valid": 450,
 
     "ready_and_valid_pe": 241,
     "ready_and_valid_mem": 300,
