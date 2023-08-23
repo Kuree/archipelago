@@ -222,7 +222,7 @@ class RoutingResultGraph:
                 if (
                     isinstance(node, TileNode)
                     and node.tile_type == TileType.REG
-                    and "d_reg_" in self.id_to_name[node.tile_id]
+                    and ("d_reg_" in self.id_to_name[node.tile_id] or "delay_reg_" in self.id_to_name[node.tile_id])
                 ):
                     regs.append(node)
             self.shift_regs = regs
@@ -579,6 +579,8 @@ class RoutingResultGraph:
         return node
 
     def update_edge_kernels(self):
+
+
         nodes = self.topological_sort()
 
         for in_node in nodes:
@@ -591,10 +593,23 @@ class RoutingResultGraph:
                 else:
                     assert node.kernel is not None
 
+        nodes.reverse()
+
+        for out_node in nodes:
+            assert out_node.kernel is not None
+            for node in self.sources[out_node]:
+                if isinstance(node, RouteNode):
+                    node.kernel = out_node.kernel
+                else:
+                    assert node.kernel is not None
+
         for tile in self.get_tiles():
             assert tile.kernel is not None, tile
             for source in self.sources[tile]:
                 source.kernel = tile.kernel
+            for sink in self.sinks[tile]:
+                sink.kernel = tile.kernel
+
 
         for node in self.nodes:
             node.update_tile_id()
@@ -754,6 +769,7 @@ def construct_graph(
     routes,
     id_to_name,
     netlist,
+    existing_kernel_latencies=None,
     pe_latency=0,
     pond_latency=0,
     io_latency=0,
@@ -992,6 +1008,18 @@ class KernelGraph:
             if ns not in visited:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
+
+    def print_graph(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)} {node.latency}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
 
 
 def construct_kernel_graph(graph, new_latencies):

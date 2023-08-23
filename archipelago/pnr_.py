@@ -33,6 +33,7 @@ def pnr(
     max_frequency=None,
     shift_registers=False,
     harden_flush=False,
+    instance_to_instr=None,
     pipeline_config_interval=0,
     pes_with_packed_ponds=None,
     sparse=False
@@ -183,6 +184,7 @@ def pnr(
                         input_netlist[0],
                         load_only,
                         harden_flush,
+                        instance_to_instr,
                         pipeline_config_interval,
                         pes_with_packed_ponds,
                         sparse
@@ -290,6 +292,7 @@ def pnr(
             input_netlist[0],
             load_only,
             harden_flush,
+            instance_to_instr,
             pipeline_config_interval,
             pes_with_packed_ponds,
             sparse

@@ -232,13 +232,13 @@ def sta(graph):
         comp = PathComponents()
         components = [comp]
 
-        if len(graph.sources[node]) == 0 and (
-            node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1
-        ):
-            if not node.input_port_break_path["output"]:
-                comp = PathComponents()
-                comp.glbs = 1
-                components = [comp]
+        # if len(graph.sources[node]) == 0 and (
+        #     node.tile_type == TileType.IO16 or node.tile_type == TileType.IO1
+        # ):
+        #     if not node.input_port_break_path["output"]:
+        #         comp = PathComponents()
+        #         comp.glbs = 1
+        #         components = [comp]
 
         for parent in graph.sources[node]:
             comp = PathComponents()
@@ -250,6 +250,7 @@ def sta(graph):
             if isinstance(node, TileNode):
                 if node.input_port_break_path[parent.port]:
                     comp = PathComponents()
+
             else:
                 if node.route_type == RouteType.PORT and isinstance(parent, TileNode):
                     if parent.tile_type == TileType.PE:
@@ -428,7 +429,7 @@ def main():
         io_cycles = 1
 
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
+        placement, routing, id_to_name, netlist, pe_latency=pe_latency, pond_latency=0, io_latency=io_cycles, sparse=sparse,
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
