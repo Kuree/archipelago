@@ -597,11 +597,12 @@ class RoutingResultGraph:
 
         for out_node in nodes:
             assert out_node.kernel is not None
-            for node in self.sources[out_node]:
-                if isinstance(node, RouteNode):
-                    node.kernel = out_node.kernel
-                else:
-                    assert node.kernel is not None
+            if "io1_" in out_node.kernel or "io16_" in out_node.kernel:
+                for node in self.sources[out_node]:
+                    if isinstance(node, RouteNode):
+                        node.kernel = out_node.kernel
+                    else:
+                        assert node.kernel is not None
 
         for tile in self.get_tiles():
             assert tile.kernel is not None, tile
@@ -683,6 +684,30 @@ class RoutingResultGraph:
 
             if not resolved:
                 unsolved_regs.append(node)
+
+    def get_connected_reg(self, node):
+        kernel = node.kernel
+        curr_node = node
+        while len(self.sources[curr_node]) == 1:
+            curr_node = self.sources[curr_node][0]
+
+            if isinstance(curr_node, RouteNode) and curr_node.kernel != kernel:
+                return None
+
+            if isinstance(curr_node, TileNode) and curr_node.tile_type == TileType.REG:
+                return curr_node
+
+        return None
+
+    def get_inputs_of_kernel(self, kernel):
+        kernel_input_nodes = []
+        for node in self.nodes:
+            for source in self.sources[node]:
+                if node.kernel == kernel and source.kernel != kernel:
+                    kernel_input_nodes.append(node)
+
+        return kernel_input_nodes
+
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = []
