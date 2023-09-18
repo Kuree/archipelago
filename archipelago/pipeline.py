@@ -678,7 +678,7 @@ def update_kernel_latencies(
         for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_output_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
-                    if "input_cgra_stencil" in kernel_port:
+                    if "input_cgra_stencil" or "in2_output_cgra_stencil" in kernel_port:
                         for port_num, d2 in d1.items():
                             d2["latency"] = updated_kernel_latencies[kernel][kernel_port][port_num]["latency"]
             if "hcompute_input_cgra_stencil" in kernel:
