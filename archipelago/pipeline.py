@@ -369,7 +369,7 @@ def find_closest_match(kernel_target, candidates):
     print("No match for", kernel_target)
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, kernel_latencies, port_remap):
-    port_remap_r = {v: k for k, v in port_remap.items()}
+    port_remap_r = {v: k for k, v in port_remap['pe'].items()}
     nodes = graph.topological_sort()
     nodes.reverse()
     node_cycles = {}
@@ -653,7 +653,7 @@ def find_stencil_valid_mem(graph, kernel):
 def calculate_latencies(
     graph, kernel_graph, node_latencies, kernel_latencies, port_remap, instance_to_instr
 ):
-    port_remap_r = {v: k for k, v in port_remap.items()}
+    port_remap_r = {v: k for k, v in port_remap['pe'].items()}
 
     max_latencies = {}
 
