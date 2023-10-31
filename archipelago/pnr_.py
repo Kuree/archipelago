@@ -72,6 +72,9 @@ def pnr(
     else:
         arch_file = arch
 
+
+    breakpoint()
+
     # prepare for the netlist
     if len(packed_file) == 0:
         packed_file = dump_packed_result(

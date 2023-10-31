@@ -240,20 +240,64 @@ def break_at(graph, node1, id_to_name, placement, routing):
     break_crit_path(graph, id_to_name, ret, placement, routing)
 
 
+def break_at_mem_node(graph, id_to_name, placement, routes, node):
+    found = False
+    curr_node = node
+    while len(graph.sinks[curr_node]) == 1 and not found:
+        next_node = graph.sinks[curr_node][0]
+
+        if (
+            isinstance(curr_node, RouteNode)
+            and curr_node.route_type == RouteType.SB
+            and isinstance(next_node, RouteNode)
+            and next_node.route_type == RouteType.RMUX
+        ):
+            crit_path = [(curr_node, 0), (next_node, 1)]
+            break_crit_path(graph, id_to_name, crit_path, placement, routes)
+            reg = graph.sinks[graph.sinks[curr_node][0]][0]
+            reg.input_port_latencies["reg"] = 0
+            reg.input_port_break_path["reg"] = True
+            found = True
+
+        curr_node = next_node
+
+    if not found:
+        found = True
+        for sink in graph.sinks[curr_node]:
+            found = found & break_at_mem_node(
+                graph, id_to_name, placement, routes, sink
+            )
+
+    return found
+
+
 def break_at_mems(graph, id_to_name, placement, routes, sparse):
     if sparse:
         return
     for mem in graph.get_mems():
         for port in graph.sinks[mem]:
-            for sb_port in graph.sinks[port]:
-                rmux = graph.sinks[sb_port][0]
-                assert isinstance(rmux, RouteNode)
-                assert rmux.route_type == RouteType.RMUX, str(rmux)
-                crit_path = [(sb_port, 0), (rmux, 1)]
-                break_crit_path(graph, id_to_name, crit_path, placement, routes)
-                reg = graph.sinks[graph.sinks[sb_port][0]][0]
-                reg.input_port_latencies["reg"] = 0
-                reg.input_port_break_path["reg"] = True
+            # if str(mem) in chained_mems and port.port == chained_mems[str(mem)]:
+            #     print(mem, port.port, "is used in chain mode, skipping mem register")
+            #     continue
+
+            found = break_at_mem_node(graph, id_to_name, placement, routes, port)
+            assert found, f"Couldn't insert register at output port {port} of {mem}"
+
+
+# def break_at_mems(graph, id_to_name, placement, routes, sparse):
+#     if sparse:
+#         return
+#     for mem in graph.get_mems():
+#         for port in graph.sinks[mem]:
+#             for sb_port in graph.sinks[port]:
+#                 rmux = graph.sinks[sb_port][0]
+#                 assert isinstance(rmux, RouteNode)
+#                 assert rmux.route_type == RouteType.RMUX, str(rmux)
+#                 crit_path = [(sb_port, 0), (rmux, 1)]
+#                 break_crit_path(graph, id_to_name, crit_path, placement, routes)
+#                 reg = graph.sinks[graph.sinks[sb_port][0]][0]
+#                 reg.input_port_latencies["reg"] = 0
+#                 reg.input_port_break_path["reg"] = True
 
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):

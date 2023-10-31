@@ -72,6 +72,8 @@ def get_mem_tile_columns(graph):
     return mem_column
 
 
+
+
 def calc_sb_delay(graph, node, parent, comp, mem_column, sparse):
     # Need to associate each sb hop with these catagories:
     # mem2pe_clk
@@ -341,9 +343,166 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
         placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
 
+    break_at_mems(routing_result_graph, id_to_name, placement, routing, sparse)
+
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
     return clock_speed
+
+def find_break_idx(graph, crit_path):
+    crit_path_adjusted = [abs(c - crit_path[-1][1] / 2) for n, c in crit_path]
+    break_idx = crit_path_adjusted.index(min(crit_path_adjusted))
+
+    if len(crit_path) < 2:
+        raise ValueError("Can't find available register on critical path")
+
+    if graph.sparse and len(crit_path) < 5:
+        raise ValueError("Can't find available FIFO on critical path")
+
+    min_path = crit_path[-1][1]
+    min_idx = -1
+
+    if graph.sparse:
+        for idx, node in enumerate(crit_path[:-4]):
+            if (
+                isinstance(crit_path[idx][0], RouteNode)
+                and crit_path[idx][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 1][0], RouteNode)
+                and crit_path[idx + 1][0].route_type == RouteType.RMUX
+                and isinstance(crit_path[idx + 2][0], RouteNode)
+                and crit_path[idx + 2][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 3][0], RouteNode)
+                and crit_path[idx + 3][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 4][0], RouteNode)
+                and crit_path[idx + 4][0].route_type == RouteType.RMUX
+            ):
+                if crit_path_adjusted[idx] < min_path:
+                    min_path = crit_path_adjusted[idx]
+                    min_idx = idx
+    else:
+        for idx, node in enumerate(crit_path[:-1]):
+            if (
+                isinstance(crit_path[idx][0], RouteNode)
+                and crit_path[idx][0].route_type == RouteType.SB
+                and isinstance(crit_path[idx + 1][0], RouteNode)
+                and crit_path[idx + 1][0].route_type == RouteType.RMUX
+            ):
+                if crit_path_adjusted[idx] < min_path:
+                    min_path = crit_path_adjusted[idx]
+                    min_idx = idx
+
+    if min_idx == -1:
+        raise ValueError("Can't find available register on critical path")
+
+    return min_idx
+
+
+def reg_into_route(routes, g_break_node_source, new_reg_route_source):
+    for net_id, net in routes.items():
+        for route in net:
+            for idx, segment in enumerate(route):
+                if g_break_node_source.to_route() == segment:
+                    route.insert(idx + 1, new_reg_route_source.to_route())
+                    return
+    assert (
+        False
+    ), f"Couldn't find segment {g_break_node_source.to_route()} in routing file"
+
+
+def break_crit_path(graph, id_to_name, crit_path, placement, routes):
+    break_idx = find_break_idx(graph, crit_path)
+
+    break_node_source = crit_path[break_idx][0]
+    break_node_dest = graph.sinks[break_node_source][0]
+
+    assert isinstance(break_node_source, RouteNode)
+    assert break_node_source.route_type == RouteType.SB
+    assert isinstance(break_node_dest, RouteNode)
+    assert break_node_dest.route_type == RouteType.RMUX
+
+    x = break_node_source.x
+    y = break_node_source.y
+    track = break_node_source.track
+    bw = break_node_source.bit_width
+    net_id = break_node_source.net_id
+    kernel = break_node_source.kernel
+    side = break_node_source.side
+    print("\nBreaking net:", net_id, "Kernel:", kernel)
+
+    dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
+
+    new_segment = ["REG", f"T{track}_{dir_map[side]}", track, x, y, bw]
+    new_reg_route_source = graph.segment_to_node(new_segment, net_id, kernel)
+    new_reg_route_source.reg = True
+    new_reg_route_source.update_tile_id()
+    new_reg_route_dest = graph.segment_to_node(new_segment, net_id, kernel)
+    new_reg_tile = TileNode(x, y, tile_id=f"r{graph.added_regs}", kernel=kernel)
+
+    new_reg_tile.input_port_latencies["reg"] = 1
+    new_reg_tile.input_port_break_path["reg"] = True
+
+    graph.added_regs += 1
+
+    graph.edges.remove((break_node_source, break_node_dest))
+    graph.add_node(new_reg_route_source)
+    graph.add_node(new_reg_tile)
+    graph.add_node(new_reg_route_dest)
+
+    graph.add_edge(break_node_source, new_reg_route_source)
+    graph.add_edge(new_reg_route_source, new_reg_tile)
+    graph.add_edge(new_reg_tile, new_reg_route_dest)
+    graph.add_edge(new_reg_route_dest, break_node_dest)
+
+    reg_into_route(routes, break_node_source, new_reg_route_source)
+    placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
+    id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+
+    graph.update_sources_and_sinks()
+    graph.update_edge_kernels()
+
+
+def break_at_mem_node(graph, id_to_name, placement, routes, node):
+    found = False
+    curr_node = node
+    while len(graph.sinks[curr_node]) == 1 and not found:
+        next_node = graph.sinks[curr_node][0]
+
+        if (
+            isinstance(curr_node, RouteNode)
+            and curr_node.route_type == RouteType.SB
+            and isinstance(next_node, RouteNode)
+            and next_node.route_type == RouteType.RMUX
+        ):
+            crit_path = [(curr_node, 0), (next_node, 1)]
+            break_crit_path(graph, id_to_name, crit_path, placement, routes)
+            reg = graph.sinks[graph.sinks[curr_node][0]][0]
+            reg.input_port_latencies["reg"] = 0
+            reg.input_port_break_path["reg"] = True
+            found = True
+
+        curr_node = next_node
+
+    if not found:
+        found = True
+        for sink in graph.sinks[curr_node]:
+            found = found & break_at_mem_node(
+                graph, id_to_name, placement, routes, sink
+            )
+
+    return found
+
+
+def break_at_mems(graph, id_to_name, placement, routes, sparse):
+    if sparse:
+        return
+    for mem in graph.get_mems():
+        for port in graph.sinks[mem]:
+            # if str(mem) in chained_mems and port.port == chained_mems[str(mem)]:
+            #     print(mem, port.port, "is used in chain mode, skipping mem register")
+            #     continue
+
+            found = break_at_mem_node(graph, id_to_name, placement, routes, port)
+            assert found, f"Couldn't insert register at output port {port} of {mem}"
 
 
 def main():
@@ -379,6 +538,8 @@ def main():
     routing_result_graph = construct_graph(
         placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
     )
+
+    break_at_mems(routing_result_graph, id_to_name, placement, routing, sparse)
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
 
