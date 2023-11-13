@@ -266,6 +266,10 @@ def pnr(
 
                 pnr_placer_density += 1
 
+        packed_file = dump_packed_result(
+            app_name, cwd, input_netlist, id_to_name, copy_to_dir=copy_to_dir
+        )
+
     if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
         del os.environ["PNR_PLACER_EXP"]
 

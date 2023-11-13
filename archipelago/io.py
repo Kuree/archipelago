@@ -18,22 +18,10 @@ def dump_packing_result(netlist, bus, filename, id_to_name):
         f.write("\n")
 
         f.write("ID to Names:\n")
-        ids = set()
-        for _, net in netlist.items():
-            for blk_id in net:
-                if isinstance(blk_id, (list, tuple)):
-                    blk_id = blk_id[0]
-                assert isinstance(blk_id, str)
-                ids.add(blk_id)
-        ids = list(ids)
-        ids.sort(key=lambda x: int(x[1:]))
-        for blk_id in ids:
-            blk_name = str(id_to_name[blk_id]) if blk_id in id_to_name \
-                else str(blk_id)
+        for blk_id, blk_name in id_to_name.items():
             f.write(str(blk_id) + ": " + blk_name + "\n")
 
         f.write("\n")
-        # registers that have been changed to PE
         f.write("Netlist Bus:\n")
         for net_id in bus:
             f.write(str(net_id) + ": " + str(bus[net_id]) + "\n")

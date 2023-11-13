@@ -1,15 +1,9 @@
-import sys
 import copy
 import os
-import argparse
-import re
-import itertools
 import glob
 import json
-from typing import Dict, List, NoReturn, Tuple, Set
 from archipelago.pnr_graph import (
     KernelNodeType,
-    RoutingResultGraph,
     construct_graph,
     construct_kernel_graph,
     TileType,
@@ -17,7 +11,8 @@ from archipelago.pnr_graph import (
     TileNode,
     RouteNode,
 )
-from archipelago.sta import sta, load_graph
+from archipelago.sta import sta
+import pythunder
 
 
 def verboseprint(*args, **kwargs):
@@ -776,10 +771,10 @@ def pipeline_pnr(
     sparse,
 ):
     if load_only:
-        id_to_name_filename = os.path.join(app_dir, f"design.id_to_name")
-        if os.path.isfile(id_to_name_filename):
-            id_to_name = load_id_to_name(id_to_name_filename)
+        packed_file = os.path.join(app_dir, "design.packed")
+        id_to_name = pythunder.io.load_id_to_name(packed_file)
         return placement, routing, id_to_name
+
 
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
@@ -922,6 +917,6 @@ def pipeline_pnr(
 
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)
-    dump_id_to_name(app_dir, id_to_name)
+    # dump_id_to_name(app_dir, id_to_name)
 
     return placement, routing, id_to_name
