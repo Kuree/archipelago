@@ -462,6 +462,15 @@ def branch_delay_match_within_kernels(
                                                 found_port = True
                                                 port_nodes.append(source)
 
+                                    for source_node, dest_node in graph.removed_edges:
+                                        if dest_node == pe:
+                                            if source_node.port in port_remap_r:
+                                                port = port_remap_r[source_node.port]
+                                                if port == compute_file_port:
+                                                    found = True
+                                                    found_port = True
+                                                    port_nodes.append(source_node)
+
                                     if not found_port:
                                         print("Couldn't find pe port")
                                         print(latency_dict)
@@ -479,9 +488,6 @@ def branch_delay_match_within_kernels(
         if kernel not in ports_with_unique_latenices:
             continue
 
-        kernel_inputs = graph.get_inputs_of_kernel(kernel)
-        print("Checking unique latencies at", kernel)
-
         for nodes_with_same_latency in ports_with_unique_latenices[kernel]:
             kernel_input_latencies = [
                 node_cycles[kernel][kernel_input]
@@ -489,10 +495,6 @@ def branch_delay_match_within_kernels(
             ]
 
             for node_with_same_latency in nodes_with_same_latency:
-                assert (
-                    node_with_same_latency in kernel_inputs
-                ), f"{node_with_same_latency} {kernel_inputs}"
-
                 same_latency = max(kernel_input_latencies)
 
                 if (

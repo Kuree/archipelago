@@ -167,6 +167,7 @@ class RoutingResultGraph:
         self.regs = None
         self.shift_regs = None
         self.roms = None
+        self.removed_edges = []
 
     def get_tile(self, tile_id):
         if tile_id in self.tile_id_to_tile:
@@ -306,8 +307,13 @@ class RoutingResultGraph:
                     if node not in visited:
                         queue.append(node)
                         visited.append(node)
-        if len(kernel_input_nodes) == 0:
-            breakpoint()
+        
+        for node in kernel_nodes:
+            if len(self.sources[node]) == 0:
+                kernel_input_nodes.append(node)
+
+        assert len(kernel_input_nodes) > 0, f"Kernel {kernel} has no input nodes"
+
         return kernel_input_nodes
 
     def get_outputs_of_kernel(self, kernel):
@@ -466,10 +472,12 @@ class RoutingResultGraph:
                     removed = False
                     for idx, n in enumerate(cycle):
                         if isinstance(n, TileNode) and n.tile_type == TileType.MEM:
+                            self.removed_edges.append((cycle[idx + 1], n))
                             self.remove_edge((cycle[idx + 1], n))
                             print("removing edge", str(cycle[idx + 1]), str(n))
                             removed = True
                     if not removed:
+                        self.removed_edges.append((cycle[1], cycle[0]))
                         self.remove_edge((cycle[1], cycle[0]))
                         print("removing edge", str(cycle[1]), str(cycle[0]))
                     return True
