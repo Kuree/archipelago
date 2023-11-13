@@ -579,8 +579,6 @@ class RoutingResultGraph:
         return node
 
     def update_edge_kernels(self):
-
-
         nodes = self.topological_sort()
 
         for in_node in nodes:
@@ -610,7 +608,6 @@ class RoutingResultGraph:
                 source.kernel = tile.kernel
             for sink in self.sinks[tile]:
                 sink.kernel = tile.kernel
-
 
         for node in self.nodes:
             node.update_tile_id()
@@ -676,7 +673,11 @@ class RoutingResultGraph:
             if next_node.kernel != None:
                 for net_id, net in netlist.items():
                     for id_ in net[1:]:
-                        if id_[0] == next_node.tile_id and id_[1] == port.port and net[0][0][0] == 'r':
+                        if (
+                            id_[0] == next_node.tile_id
+                            and id_[1] == port.port
+                            and net[0][0][0] == "r"
+                        ):
                             resolved = True
                             node.tile_id = net[0][0]
                             node.kernel = self.id_to_name[node.tile_id].split("$")[0]
@@ -707,7 +708,6 @@ class RoutingResultGraph:
                     kernel_input_nodes.append(node)
 
         return kernel_input_nodes
-
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = []

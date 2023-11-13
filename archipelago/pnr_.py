@@ -36,7 +36,7 @@ def pnr(
     instance_to_instr=None,
     pipeline_config_interval=0,
     pes_with_packed_ponds=None,
-    sparse=False
+    sparse=False,
 ):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
@@ -95,7 +95,9 @@ def pnr(
         wave_filename = None
 
     if id_to_name is None:
-        id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
+        id_to_name = pythunder.io.load_id_to_name(
+            os.path.join(cwd, app_name + ".packed")
+        )
 
     pnr_placer_exp_set = False
     if not load_only:
@@ -141,7 +143,7 @@ def pnr(
 
                 if os.path.isfile(placement_filename):
                     os.remove(placement_filename)
-                
+
                 if fixed_pos is not None:
                     assert isinstance(fixed_pos, dict)
                     dump_placement_result(fixed_pos, placement_filename, id_to_name)
@@ -187,10 +189,14 @@ def pnr(
                         instance_to_instr,
                         pipeline_config_interval,
                         pes_with_packed_ponds,
-                        sparse
-                    )    
+                        sparse,
+                    )
                     freq = run_sta(
-                        packed_file, placement_filename, route_filename, id_to_name, sparse
+                        packed_file,
+                        placement_filename,
+                        route_filename,
+                        id_to_name,
+                        sparse,
                     )
                     if freq > max_freq:
                         max_freq = freq
@@ -233,14 +239,13 @@ def pnr(
             while pnr_placer_density <= 30:
                 if os.path.isfile(placement_filename):
                     os.remove(placement_filename)
-                
+
                 if fixed_pos is not None:
                     assert isinstance(fixed_pos, dict)
                     dump_placement_result(fixed_pos, placement_filename, id_to_name)
                     has_fixed = True
                 else:
                     has_fixed = False
-
 
                 os.environ["PNR_PLACER_EXP"] = str(pnr_placer_density)
                 print(
@@ -299,7 +304,7 @@ def pnr(
             instance_to_instr,
             pipeline_config_interval,
             pes_with_packed_ponds,
-            sparse
+            sparse,
         )
 
     # tear down

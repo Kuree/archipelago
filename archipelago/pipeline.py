@@ -336,6 +336,7 @@ def branch_delay_match_all_nodes(graph, id_to_name, placement, routing):
         else:
             node_cycles[node] = None
 
+
 def find_closest_match(kernel_target, candidates):
     candidates = [c for c in candidates if "io1_" not in c]
 
@@ -363,8 +364,11 @@ def find_closest_match(kernel_target, candidates):
 
     print("No match for", kernel_target)
 
-def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, kernel_latencies, port_remap):
-    port_remap_r = {v: k for k, v in port_remap['pe'].items()}
+
+def branch_delay_match_within_kernels(
+    graph, id_to_name, placement, routing, kernel_latencies, port_remap
+):
+    port_remap_r = {v: k for k, v in port_remap["pe"].items()}
     nodes = graph.topological_sort()
     nodes.reverse()
     node_cycles = {}
@@ -428,7 +432,6 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
         else:
             node_cycles[node.kernel][node] = None
 
-
     # Only certain inputs of compute kernels can have different latencies (dictated by clockwork and H2H)
     # First determine which nodes can have unique latencies
     ports_with_unique_latenices = {}
@@ -447,7 +450,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
                             for pe in graph.get_tiles() + graph.get_regs():
                                 if (
                                     graph.id_to_name[str(pe)]
-                                    == f'{match}$inner_compute${compute_file_tile}'
+                                    == f"{match}$inner_compute${compute_file_tile}"
                                 ):
                                     found_port = False
                                     for source in graph.sources[pe]:
@@ -457,7 +460,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
                                                 found = True
                                                 found_port = True
                                                 port_nodes.append(source)
-                                                
+
                                     if not found_port:
                                         print("Couldn't find pe port")
                                         print(latency_dict)
@@ -474,28 +477,46 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
     for kernel in node_cycles:
         if kernel not in ports_with_unique_latenices:
             continue
-        
+
         kernel_inputs = graph.get_inputs_of_kernel(kernel)
         print("Checking unique latencies at", kernel)
 
         for nodes_with_same_latency in ports_with_unique_latenices[kernel]:
-
-            kernel_input_latencies = [node_cycles[kernel][kernel_input] for kernel_input in nodes_with_same_latency]
+            kernel_input_latencies = [
+                node_cycles[kernel][kernel_input]
+                for kernel_input in nodes_with_same_latency
+            ]
 
             for node_with_same_latency in nodes_with_same_latency:
-                assert node_with_same_latency in kernel_inputs, f"{node_with_same_latency} {kernel_inputs}"
+                assert (
+                    node_with_same_latency in kernel_inputs
+                ), f"{node_with_same_latency} {kernel_inputs}"
 
                 same_latency = max(kernel_input_latencies)
 
-                print("\t", str(graph.sinks[node_with_same_latency][0]), node_with_same_latency.port, node_cycles[kernel][node_with_same_latency], same_latency)
+                print(
+                    "\t",
+                    str(graph.sinks[node_with_same_latency][0]),
+                    node_with_same_latency.port,
+                    node_cycles[kernel][node_with_same_latency],
+                    same_latency,
+                )
 
-                if node_cycles[kernel][node_with_same_latency] != same_latency and node_with_same_latency not in ports_with_unique_latenices[kernel]:
+                if (
+                    node_cycles[kernel][node_with_same_latency] != same_latency
+                    and node_with_same_latency
+                    not in ports_with_unique_latenices[kernel]
+                ):
                     verboseprint(
                         f"\tIncorrect delay between ports of kernel: {kernel} {node_with_same_latency} {node_cycles[kernel][node_with_same_latency]} {same_latency}"
                     )
-                    verboseprint(f"\tFixing branching delays at: {node_with_same_latency}")
+                    verboseprint(
+                        f"\tFixing branching delays at: {node_with_same_latency}"
+                    )
                     for sink in graph.sinks[node_with_same_latency]:
-                        for _ in range(same_latency - node_cycles[kernel][node_with_same_latency]):
+                        for _ in range(
+                            same_latency - node_cycles[kernel][node_with_same_latency]
+                        ):
                             break_at(
                                 graph,
                                 sink,
@@ -627,8 +648,6 @@ def flush_cycles(
     return flush_cycles, max_flush_cycles
 
 
-
-
 def find_stencil_valid_mem(graph, kernel):
     for node in graph.nodes:
         if node.kernel == kernel:
@@ -645,10 +664,11 @@ def find_stencil_valid_mem(graph, kernel):
 
         curr_node = graph.sources[curr_node][0]
 
+
 def calculate_latencies(
     graph, kernel_graph, node_latencies, kernel_latencies, port_remap, instance_to_instr
 ):
-    port_remap_r = {v: k for k, v in port_remap['pe'].items()}
+    port_remap_r = {v: k for k, v in port_remap["pe"].items()}
 
     max_latencies = {}
 
@@ -672,14 +692,15 @@ def calculate_latencies(
                 max_latencies[node1] = 0
 
                 if max_latencies[node16] < max_diff:
-                    raise Exception(f"Can't absorb stencil valid latency of {max_latencies[node16]} into compute kernel")
+                    raise Exception(
+                        f"Can't absorb stencil valid latency of {max_latencies[node16]} into compute kernel"
+                    )
 
                 # if max_latencies[node16] < 0:
                 stencil_valid_mem = find_stencil_valid_mem(graph, node1)
                 # need to adjust stencil valid latency
                 stencil_valid_adjust[stencil_valid_mem.kernel] = max_latencies[node16]
                 max_latencies[node16] = 0
-
 
     # Alright I know this next part is gross but I think it works?
     # Kernel latencies are from the file passed to clockwork, need to match the latencies in the routing graph to this
@@ -705,7 +726,7 @@ def calculate_latencies(
                             for pe in graph.get_tiles():
                                 if (
                                     graph.id_to_name[str(pe)]
-                                    == f'{match}$inner_compute${compute_file_tile}'
+                                    == f"{match}$inner_compute${compute_file_tile}"
                                 ):
                                     found_port = False
                                     for source in graph.sources[pe]:
@@ -719,15 +740,21 @@ def calculate_latencies(
                                                     lat = node_latencies[match][source]
 
                                                 if found_lat is not None:
-                                                    assert lat == found_lat, f"Found multiple latencies for {kernel} {kernel_port} {port_num} {compute_file_tile} {compute_file_port} {lat} {found_lat}"
-                                                kernel_latencies[kernel][kernel_port][port_num]["latency"] = lat
+                                                    assert (
+                                                        lat == found_lat
+                                                    ), f"Found multiple latencies for {kernel} {kernel_port} {port_num} {compute_file_tile} {compute_file_port} {lat} {found_lat}"
+                                                kernel_latencies[kernel][kernel_port][
+                                                    port_num
+                                                ]["latency"] = lat
                                                 found = True
                                                 found_port = True
                                                 found_lat = lat
                                                 break
                                     if not found_port:
                                         found = True
-                                        kernel_latencies[kernel][kernel_port][port_num]["latency"] = node_latencies[match][graph.sources[pe][0]]
+                                        kernel_latencies[kernel][kernel_port][port_num][
+                                            "latency"
+                                        ] = node_latencies[match][graph.sources[pe][0]]
 
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
@@ -750,13 +777,12 @@ def update_kernel_latencies(
 ):
     if sparse:
         return
-    
+
     port_remap = json.load(open(f"{dir_name}/design.port_remap"))
 
     kernel_latencies, node_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing, existing_kernel_latencies, port_remap
     )
-    
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
@@ -774,28 +800,40 @@ def update_kernel_latencies(
                 node.latency >= 0
             ), f"{node.kernel} has negative compute kernel latency"
 
-
-
     matched_kernel_latencies, stencil_valid_adjust = calculate_latencies(
-        graph, kernel_graph, node_latencies, existing_kernel_latencies, port_remap, instance_to_instr
+        graph,
+        kernel_graph,
+        node_latencies,
+        existing_kernel_latencies,
+        port_remap,
+        instance_to_instr,
     )
     if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
-        updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
+        updated_kernel_latencies = json.load(
+            open(f"{dir_name}/updated_kernel_latencies.json")
+        )
         ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
         for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_output_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     if "input_cgra_stencil" or "in2_output_cgra_stencil" in kernel_port:
                         for port_num, d2 in d1.items():
-                            d2["latency"] = updated_kernel_latencies[kernel][kernel_port][port_num]["latency"]
+                            d2["latency"] = updated_kernel_latencies[kernel][
+                                kernel_port
+                            ][port_num]["latency"]
             if "hcompute_input_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     for port_num, d2 in d1.items():
-                        d2["latency"] = ub_latencies["input_cgra_stencil"][port_num]["latency"]
+                        d2["latency"] = ub_latencies["input_cgra_stencil"][port_num][
+                            "latency"
+                        ]
             if "hcompute_kernel_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     for port_num, d2 in d1.items():
-                        d2["latency"] = min(value["latency"] for value in ub_latencies["kernel_cgra_stencil"].values())
+                        d2["latency"] = min(
+                            value["latency"]
+                            for value in ub_latencies["kernel_cgra_stencil"].values()
+                        )
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
     }
@@ -817,7 +855,6 @@ def update_kernel_latencies(
     stencil_valid_latencies_file = kernel_latencies_file.replace(
         "compute_kernel_latencies", "stencil_valid_latencies"
     )
-
 
     fout = open(kernel_latencies_file, "w")
     fout.write(json.dumps(matched_kernel_latencies, indent=4))
@@ -903,7 +940,6 @@ def pipeline_pnr(
         packed_file = os.path.join(app_dir, "design.packed")
         id_to_name = pythunder.io.load_id_to_name(packed_file)
         return placement, routing, id_to_name
-
 
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
@@ -1053,7 +1089,6 @@ def pipeline_pnr(
         print(
             "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
         )
-
 
     graph.print_graph_tiles_only("/aha/post-pnr-tiles")
     graph.print_graph("/aha/post-pnr")
