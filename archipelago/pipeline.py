@@ -937,8 +937,11 @@ def pipeline_pnr(
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
     id_to_name_save = copy.deepcopy(id_to_name)
-    kernel_latencies_file = glob.glob(f"{app_dir}/*_compute_kernel_latencies.json")[0]
-    existing_kernel_latencies = json.load(open(kernel_latencies_file, "r"))
+
+    existing_kernel_latencies = {}
+    if not sparse:
+        kernel_latencies_file = glob.glob(f"{app_dir}/*_compute_kernel_latencies.json")[0]
+        existing_kernel_latencies = json.load(open(kernel_latencies_file, "r"))
 
     if "PIPELINED" in os.environ and os.environ["PIPELINED"].isnumeric():
         pe_cycles = int(os.environ["PIPELINED"])
