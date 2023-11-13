@@ -370,6 +370,7 @@ def find_closest_match(kernel_target, candidates):
 
 def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, kernel_latencies, port_remap):
     port_remap_r = {v: k for k, v in port_remap['pe'].items()}
+    port_remap_r['reg'] = 'reg'
     nodes = graph.topological_sort()
     nodes.reverse()
     node_cycles = {}
@@ -449,7 +450,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
                         port_nodes = []
                         for compute_file_tile, compute_file_port in d2["pe_port"]:
                             found = False
-                            for pe in graph.get_tiles() + graph.get_regs():
+                            for pe in graph.get_tiles():
                                 if (
                                     graph.id_to_name[str(pe)]
                                     == f'{match}$inner_compute${compute_file_tile}'
@@ -492,7 +493,7 @@ def branch_delay_match_within_kernels(graph, id_to_name, placement, routing, ker
 
                 same_latency = max(kernel_input_latencies)
 
-                print("\t", str(graph.sinks[node_with_same_latency][0]), node_with_same_latency.port, node_cycles[kernel][node_with_same_latency], same_latency)
+                # print("\t", str(graph.sinks[node_with_same_latency][0]), node_with_same_latency.port, node_cycles[kernel][node_with_same_latency], same_latency)
 
                 if node_cycles[kernel][node_with_same_latency] != same_latency and node_with_same_latency not in ports_with_unique_latenices[kernel]:
                     verboseprint(
@@ -761,7 +762,6 @@ def update_kernel_latencies(
     kernel_latencies, node_latencies = branch_delay_match_within_kernels(
         graph, id_to_name, placement, routing, existing_kernel_latencies, port_remap
     )
-    
 
     kernel_graph = construct_kernel_graph(graph, kernel_latencies)
 
@@ -1025,8 +1025,6 @@ def pipeline_pnr(
             curr_freq, crit_path, crit_nets = sta(graph)
             break_crit_path(graph, id_to_name, crit_path, placement, routing)
 
-        graph.print_graph_tiles_only("/aha/post-pnr-tiles-pre-update")
-
         update_kernel_latencies(
             app_dir,
             graph,
@@ -1059,9 +1057,6 @@ def pipeline_pnr(
             "\nAdded", graph.added_regs - starting_regs, "registers to routing graph\n"
         )
 
-
-    graph.print_graph_tiles_only("/aha/post-pnr-tiles")
-    graph.print_graph("/aha/post-pnr")
 
     freq_file = os.path.join(app_dir, "design.freq")
     fout = open(freq_file, "w")

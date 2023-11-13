@@ -579,8 +579,6 @@ class RoutingResultGraph:
         return node
 
     def update_edge_kernels(self):
-
-
         nodes = self.topological_sort()
 
         for in_node in nodes:
