@@ -226,6 +226,7 @@ def break_at(graph, node1, id_to_name, placement, routing):
 
     if len(path) == 0:
         raise ValueError(f"Cant break at node: {node1}")
+    
     path.reverse()
     ret = []
     for p in path:
@@ -392,18 +393,21 @@ def branch_delay_match_within_kernels(
                 c += sink.input_port_latencies[node.port]
             elif node in graph.get_input_ios():
                 # Need special case for input IOs
-                c += node.input_port_latencies["output"]
+                if c != None:
+                    c += node.input_port_latencies["output"]
+                else:
+                    c = node.input_port_latencies["output"]
 
             if (
-                isinstance(node, TileNode)
-                and node.tile_type == TileType.PE
-                and sink.port == "PondTop_output_width_17_num_0"
+                isinstance(sink, RouteNode) and 
+                sink.packed_pond_path
             ):
                 continue
+            
             cycles.add(c)
 
         if None in cycles:
-            cycles.remove(None)
+            cycles = [c for c in cycles if c != None]
 
         if len(cycles) > 1:
             if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
@@ -493,7 +497,7 @@ def branch_delay_match_within_kernels(
                 node_cycles[kernel][kernel_input]
                 for kernel_input in nodes_with_same_latency
             ]
-
+            
             for node_with_same_latency in nodes_with_same_latency:
                 same_latency = max(kernel_input_latencies)
 
@@ -523,7 +527,9 @@ def branch_delay_match_within_kernels(
 
     kernel_latencies = {}
     for kernel in node_cycles:
-        kernel_latencies[kernel] = max(node_cycles[kernel].values())
+        kernel_cycles = [k for k in node_cycles[kernel].values() if k != None]
+        kernel_latencies[kernel] = max(kernel_cycles)
+
 
     return kernel_latencies, node_cycles
 

@@ -247,10 +247,10 @@ def pnr(
                 else:
                     has_fixed = False
 
-                os.environ["PNR_PLACER_EXP"] = str(pnr_placer_density)
+                os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
                 print(
                     "Trying placement with PnR placer exp:",
-                    os.environ["PNR_PLACER_EXP"],
+                    os.environ["PNR_PLACER_DENSITY"],
                 )
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
@@ -269,7 +269,7 @@ def pnr(
                     )
                     break
                 except:
-                    print("Unable to route with PNR_PLACER_EXP:", pnr_placer_density)
+                    print("Unable to route with PNR_PLACER_DENSITY:", pnr_placer_density)
 
                 pnr_placer_density += 1
 

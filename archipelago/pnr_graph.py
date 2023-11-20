@@ -27,6 +27,7 @@ class RouteNode:
         rmux_name=None,
         reg=False,
         kernel=None,
+        packed_pond_path=False,
     ):
         assert x is not None
         self.x = x
@@ -53,6 +54,7 @@ class RouteNode:
         self.rmux_name = rmux_name
         self.reg = reg
         self.kernel = kernel
+        self.packed_pond_path = packed_pond_path
 
     def update_tile_id(self):
         self.tile_id = (
@@ -308,10 +310,6 @@ class RoutingResultGraph:
                         queue.append(node)
                         visited.append(node)
         
-        for node in kernel_nodes:
-            if len(self.sources[node]) == 0:
-                kernel_input_nodes.append(node)
-
         assert len(kernel_input_nodes) > 0, f"Kernel {kernel} has no input nodes"
 
         return kernel_input_nodes
@@ -462,6 +460,7 @@ class RoutingResultGraph:
         return None
 
     def fix_cycles(self):
+        return False
         sys.setrecursionlimit(10**6)
         visited = []
         rec_stack = []
@@ -482,6 +481,27 @@ class RoutingResultGraph:
                         print("removing edge", str(cycle[1]), str(cycle[0]))
                     return True
         return False
+    
+    def label_packed_pond_path(self):
+        for pe in self.get_pes():
+            # sources first
+            for source in self.sources[pe]:
+                if isinstance(source, RouteNode) and source.route_type == RouteType.PORT and "PondTop" in source.port:
+                    # follow path up
+                    curr_node = source
+                    while len(self.sources[curr_node]) == 1 and len(self.sinks[curr_node]) == 1:
+                        curr_node.packed_pond_path = True
+                        curr_node = self.sources[curr_node][0]
+
+            # now sinks
+            for sink in self.sinks[pe]:
+                if isinstance(sink, RouteNode) and sink.route_type == RouteType.PORT and "PondTop" in sink.port:                
+                    # follow path down
+                    curr_node = sink
+                    while len(self.sinks[curr_node]) == 1 and len(self.sinks[curr_node]) == 1:
+                        curr_node.packed_pond_path = True
+                        curr_node = self.sinks[curr_node][0]
+
 
     def segment_to_node(self, segment, net_id, kernel=None):
         if segment[0] == "SB":
@@ -917,6 +937,7 @@ def construct_graph(
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
+    graph.label_packed_pond_path()
 
     while graph.fix_cycles():
         pass
