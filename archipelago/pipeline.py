@@ -552,9 +552,9 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
 
         for parent in kernel_graph.sources[node]:
             if parent not in node_cycles:
-                c = 0
-            else:
-                c = node_cycles[parent]
+                node_cycles[parent] = 0
+            
+            c = node_cycles[parent]
 
             if c is not None:
                 c += node.latency
@@ -570,7 +570,6 @@ def branch_delay_match_kernels(kernel_graph, graph, id_to_name, placement, routi
 
         if len(kernel_graph.sources[node]) > 1 and len(cycles) > 1:
             verboseprint(f"\tIncorrect kernel delay: {node} {cycles}")
-
             source_cycles = [
                 node_cycles[source]
                 for source in kernel_graph.sources[node]
@@ -740,6 +739,9 @@ def calculate_latencies(
                                                 else:
                                                     lat = node_latencies[match][source]
 
+                                                if lat is None:
+                                                    breakpoint()
+
                                                 if found_lat is not None:
                                                     assert (
                                                         lat == found_lat
@@ -756,6 +758,8 @@ def calculate_latencies(
                                         kernel_latencies[kernel][kernel_port][port_num][
                                             "latency"
                                         ] = node_latencies[match][graph.sources[pe][0]]
+                                        if node_latencies[match][graph.sources[pe][0]] == None:
+                                            breakpoint()
 
                         if not found:
                             print("Couldn't find tile port in kernel latencies", kernel)
@@ -966,11 +970,11 @@ def pipeline_pnr(
         routing,
         id_to_name,
         netlist,
-        existing_kernel_latencies,
         pe_latency=pe_cycles,
         pond_latency=0,
         io_latency=io_cycles,
         sparse=sparse,
+        pes_with_packed_ponds=pes_with_packed_ponds
     )
 
     print("\nApplication Frequency:")
@@ -1034,11 +1038,11 @@ def pipeline_pnr(
             routing,
             id_to_name,
             netlist,
-            existing_kernel_latencies,
             pe_latency=pe_cycles,
             pond_latency=0,
             io_latency=io_cycles,
             sparse=sparse,
+            pes_with_packed_ponds=pes_with_packed_ponds
         )
         starting_regs = graph.added_regs
 

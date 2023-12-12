@@ -161,6 +161,7 @@ class RoutingResultGraph:
         self.id_to_ports = {}
         self.id_to_name: Dict[str, str] = {}
         self.added_regs = 0
+        self.packed_ponds = 0
         self.mems = None
         self.pes = None
         self.ponds = None
@@ -767,6 +768,44 @@ class RoutingResultGraph:
                         visited.append(node)
         return kernel_output_nodes
 
+    def unpack_ponds(self, pes_with_packed_ponds):
+        for pe in self.get_pes():
+
+            input_ports_to_adjust = []
+            # inputs ports
+            for port in self.sources[pe]:
+                assert isinstance(port, RouteNode)
+                if "PondTop" in port.port:
+                    input_ports_to_adjust.append(port)
+
+            output_ports_to_adjust = []
+            # outputs ports
+            for port in self.sinks[pe]:
+                assert isinstance(port, RouteNode)
+                if "PondTop" in port.port:
+                    output_ports_to_adjust.append(port)
+
+            if len(input_ports_to_adjust) > 0:
+                assert pe.tile_id in pes_with_packed_ponds, f"PE {pe.tile_id} not in pes_with_packed_ponds"
+                pond_id = pes_with_packed_ponds[pe.tile_id]
+                # Need to unpack the pond
+                kernel = self.id_to_name[pond_id].split("$")[0]
+                pond_node = TileNode(pe.x, pe.y, tile_id=pond_id, kernel=kernel)
+                self.add_node(pond_node)
+
+                for port in input_ports_to_adjust:
+                    self.remove_edge((port, pe))
+                    port.kernel = kernel
+                    self.add_edge(port, pond_node)
+                    pond_node.input_port_latencies[port.port] = 0
+                    pond_node.input_port_break_path[port.port] = True
+
+                for port in output_ports_to_adjust:
+                    self.remove_edge((pe, port))
+                    port.kernel = kernel
+                    self.add_edge(pond_node, port)
+
+
     def print_graph(self, filename):
         from graphviz import Digraph
 
@@ -822,11 +861,11 @@ def construct_graph(
     routes,
     id_to_name,
     netlist,
-    existing_kernel_latencies=None,
     pe_latency=0,
     pond_latency=0,
     io_latency=0,
     sparse=False,
+    pes_with_packed_ponds={}
 ):
     graph = RoutingResultGraph()
     graph.id_to_name = id_to_name
@@ -885,9 +924,6 @@ def construct_graph(
 
     graph.fix_regs(netlist)
 
-    while graph.fix_cycles():
-        pass
-
     id_to_input_ports = {}
     for net_id, conns in netlist.items():
         for conn in conns[1:]:
@@ -937,10 +973,12 @@ def construct_graph(
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
-    graph.label_packed_pond_path()
+    graph.unpack_ponds(pes_with_packed_ponds)
 
     while graph.fix_cycles():
         pass
+
+    graph.print_graph("/aha/unpacked_ponds")
 
     return graph
 
