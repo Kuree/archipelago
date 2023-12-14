@@ -247,10 +247,10 @@ def pnr(
                 else:
                     has_fixed = False
 
-                os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
+                os.environ["PNR_PLACER_EXP"] = str(pnr_placer_density)
                 print(
                     "Trying placement with PnR placer exp:",
-                    os.environ["PNR_PLACER_DENSITY"],
+                    os.environ["PNR_PLACER_EXP"],
                 )
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
