@@ -461,7 +461,7 @@ class RoutingResultGraph:
         return None
 
     def fix_cycles(self):
-        return False
+        # return False
         sys.setrecursionlimit(10**6)
         visited = []
         rec_stack = []
