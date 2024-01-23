@@ -800,26 +800,20 @@ def update_kernel_latencies(
         instance_to_instr,
     )
     if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
-        updated_kernel_latencies = json.load(
-            open(f"{dir_name}/updated_kernel_latencies.json")
-        )
+        updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
         ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
         for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_output_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     if "input_cgra_stencil" or "in2_output_cgra_stencil" in kernel_port:
-                        d1["latency"] = updated_kernel_latencies[kernel][
-                                kernel_port
-                            ]["latency"]
+                        d1["latency"] = updated_kernel_latencies[kernel][kernel_port]["latency"]
             if "hcompute_input_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
-                    d1["latency"] = ub_latencies["input_cgra_stencil"]["latency"]
+                    port_num = kernel_port.split("_")[-1]
+                    d1["latency"] = ub_latencies["input_cgra_stencil"][port_num]["latency"]
             if "hcompute_kernel_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
-                    d1["latency"] = min(
-                            value["latency"]
-                            for value in ub_latencies["kernel_cgra_stencil"].values()
-                        )
+                    d1["latency"] = min(value["latency"] for value in ub_latencies["kernel_cgra_stencil"].values())
     matched_flush_latencies = {
         id_to_name[str(mem_id)]: latency for mem_id, latency in flush_latencies.items()
     }
