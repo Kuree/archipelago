@@ -18,7 +18,7 @@ def dump_packing_result(netlist, bus, filename, id_to_name):
         f.write("\n")
 
         f.write("ID to Names:\n")
-        ids = set()
+        ids = set(id_to_name.keys())
         for _, net in netlist.items():
             for blk_id in net:
                 if isinstance(blk_id, (list, tuple)):

@@ -167,6 +167,7 @@ class RoutingResultGraph:
         self.regs = None
         self.shift_regs = None
         self.roms = None
+        self.removed_edges = []
 
     def get_tile(self, tile_id):
         if tile_id in self.tile_id_to_tile:
@@ -306,8 +307,13 @@ class RoutingResultGraph:
                     if node not in visited:
                         queue.append(node)
                         visited.append(node)
-        if len(kernel_input_nodes) == 0:
-            breakpoint()
+        
+        for node in kernel_nodes:
+            if len(self.sources[node]) == 0:
+                kernel_input_nodes.append(node)
+
+        assert len(kernel_input_nodes) > 0, f"Kernel {kernel} has no input nodes"
+
         return kernel_input_nodes
 
     def get_outputs_of_kernel(self, kernel):
@@ -466,10 +472,12 @@ class RoutingResultGraph:
                     removed = False
                     for idx, n in enumerate(cycle):
                         if isinstance(n, TileNode) and n.tile_type == TileType.MEM:
+                            self.removed_edges.append((cycle[idx + 1], n))
                             self.remove_edge((cycle[idx + 1], n))
                             print("removing edge", str(cycle[idx + 1]), str(n))
                             removed = True
                     if not removed:
+                        self.removed_edges.append((cycle[1], cycle[0]))
                         self.remove_edge((cycle[1], cycle[0]))
                         print("removing edge", str(cycle[1]), str(cycle[0]))
                     return True
@@ -591,10 +599,23 @@ class RoutingResultGraph:
                 else:
                     assert node.kernel is not None
 
+        nodes.reverse()
+
+        for out_node in nodes:
+            assert out_node.kernel is not None
+            if "io1_" in out_node.kernel or "io16_" in out_node.kernel:
+                for node in self.sources[out_node]:
+                    if isinstance(node, RouteNode):
+                        node.kernel = out_node.kernel
+                    else:
+                        assert node.kernel is not None
+
         for tile in self.get_tiles():
             assert tile.kernel is not None, tile
             for source in self.sources[tile]:
                 source.kernel = tile.kernel
+            for sink in self.sinks[tile]:
+                sink.kernel = tile.kernel
 
         for node in self.nodes:
             node.update_tile_id()
@@ -660,7 +681,11 @@ class RoutingResultGraph:
             if next_node.kernel != None:
                 for net_id, net in netlist.items():
                     for id_ in net[1:]:
-                        if id_[0] == next_node.tile_id and id_[1] == port.port:
+                        if (
+                            id_[0] == next_node.tile_id
+                            and id_[1] == port.port
+                            and net[0][0][0] == "r"
+                        ):
                             resolved = True
                             node.tile_id = net[0][0]
                             node.kernel = self.id_to_name[node.tile_id].split("$")[0]
@@ -668,6 +693,29 @@ class RoutingResultGraph:
 
             if not resolved:
                 unsolved_regs.append(node)
+
+    def get_connected_reg(self, node):
+        kernel = node.kernel
+        curr_node = node
+        while len(self.sources[curr_node]) == 1:
+            curr_node = self.sources[curr_node][0]
+
+            if isinstance(curr_node, RouteNode) and curr_node.kernel != kernel:
+                return None
+
+            if isinstance(curr_node, TileNode) and curr_node.tile_type == TileType.REG:
+                return curr_node
+
+        return None
+
+    def get_inputs_of_kernel(self, kernel):
+        kernel_input_nodes = []
+        for node in self.nodes:
+            for source in self.sources[node]:
+                if node.kernel == kernel and source.kernel != kernel:
+                    kernel_input_nodes.append(node)
+
+        return kernel_input_nodes
 
     def get_output_tiles_of_kernel(self, kernel):
         kernel_nodes = []
@@ -754,6 +802,7 @@ def construct_graph(
     routes,
     id_to_name,
     netlist,
+    existing_kernel_latencies=None,
     pe_latency=0,
     pond_latency=0,
     io_latency=0,
@@ -992,6 +1041,18 @@ class KernelGraph:
             if ns not in visited:
                 self.topological_sort_helper(ns, stack, visited)
         stack.append(node)
+
+    def print_graph(self, filename):
+        from graphviz import Digraph
+
+        g = Digraph()
+        for node in self.nodes:
+            g.node(str(node), label=f"{str(node)} {node.latency}")
+
+        for edge in self.edges:
+            g.edge(str(edge[0]), str(edge[1]))
+
+        g.render(filename=filename)
 
 
 def construct_kernel_graph(graph, new_latencies):

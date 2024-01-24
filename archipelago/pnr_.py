@@ -33,9 +33,10 @@ def pnr(
     max_frequency=None,
     shift_registers=False,
     harden_flush=False,
+    instance_to_instr=None,
     pipeline_config_interval=0,
     pes_with_packed_ponds=None,
-    sparse=False
+    sparse=False,
 ):
     if input_netlist is None and len(packed_file):
         raise ValueError("Invalid input")
@@ -94,7 +95,9 @@ def pnr(
         wave_filename = None
 
     if id_to_name is None:
-        id_to_name = pythunder.io.load_id_to_name(os.path.join(cwd, app_name + ".packed")) 
+        id_to_name = pythunder.io.load_id_to_name(
+            os.path.join(cwd, app_name + ".packed")
+        )
 
     pnr_placer_exp_set = False
     if not load_only:
@@ -140,7 +143,7 @@ def pnr(
 
                 if os.path.isfile(placement_filename):
                     os.remove(placement_filename)
-                
+
                 if fixed_pos is not None:
                     assert isinstance(fixed_pos, dict)
                     dump_placement_result(fixed_pos, placement_filename, id_to_name)
@@ -183,12 +186,17 @@ def pnr(
                         input_netlist[0],
                         load_only,
                         harden_flush,
+                        instance_to_instr,
                         pipeline_config_interval,
                         pes_with_packed_ponds,
-                        sparse
-                    )    
+                        sparse,
+                    )
                     freq = run_sta(
-                        packed_file, placement_filename, route_filename, id_to_name, sparse
+                        packed_file,
+                        placement_filename,
+                        route_filename,
+                        id_to_name,
+                        sparse,
                     )
                     if freq > max_freq:
                         max_freq = freq
@@ -231,7 +239,7 @@ def pnr(
             while pnr_placer_density <= 30:
                 if os.path.isfile(placement_filename):
                     os.remove(placement_filename)
-                
+
                 if fixed_pos is not None:
                     assert isinstance(fixed_pos, dict)
                     dump_placement_result(fixed_pos, placement_filename, id_to_name)
@@ -239,11 +247,10 @@ def pnr(
                 else:
                     has_fixed = False
 
-
-                os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
+                os.environ["PNR_PLACER_EXP"] = str(pnr_placer_density)
                 print(
-                    "Trying placement with PnR placer density:",
-                    os.environ["PNR_PLACER_DENSITY"],
+                    "Trying placement with PnR placer exp:",
+                    os.environ["PNR_PLACER_EXP"],
                 )
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
@@ -262,9 +269,9 @@ def pnr(
                     )
                     break
                 except:
-                    print("Unable to route with PNR_PLACER_DENSITY:", pnr_placer_density)
+                    print("Unable to route with PNR_PLACER_EXP:", pnr_placer_density)
 
-                pnr_placer_density += 5
+                pnr_placer_density += 1
 
     if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
         del os.environ["PNR_PLACER_EXP"]
@@ -290,9 +297,13 @@ def pnr(
             input_netlist[0],
             load_only,
             harden_flush,
+            instance_to_instr,
             pipeline_config_interval,
             pes_with_packed_ponds,
-            sparse
+            sparse,
+        )
+        packed_file = dump_packed_result(
+            app_name, cwd, input_netlist, id_to_name, copy_to_dir=copy_to_dir
         )
 
     # tear down
