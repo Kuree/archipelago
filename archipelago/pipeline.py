@@ -799,14 +799,20 @@ def update_kernel_latencies(
         port_remap,
         instance_to_instr,
     )
-    if "IO2MEM_REG_CHAIN" in os.environ or "MEM2PE_REG_CHAIN" in os.environ:
+    # updated_kernel_latencies.json only for residual add and manual placed resnet for now
+    if os.path.exists(f"{dir_name}/updated_kernel_latencies.json"):
         updated_kernel_latencies = json.load(open(f"{dir_name}/updated_kernel_latencies.json"))
-        ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
         for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_output_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     if "input_cgra_stencil" or "in2_output_cgra_stencil" in kernel_port:
                         d1["latency"] = updated_kernel_latencies[kernel][kernel_port]["latency"]
+            if "_glb_" in kernel:
+                matched_kernel_latencies[kernel] = updated_kernel_latencies[kernel]
+    # ub_latency.json only for manual placed resnet
+    if os.path.exists(f"{dir_name}/ub_latency.json"):
+        ub_latencies = json.load(open(f"{dir_name}/ub_latency.json"))
+        for kernel, latency_dict in matched_kernel_latencies.items():
             if "hcompute_input_cgra_stencil" in kernel:
                 for kernel_port, d1 in latency_dict.items():
                     port_num = kernel_port.split("_")[-1]
