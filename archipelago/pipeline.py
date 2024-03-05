@@ -15,11 +15,11 @@ from archipelago.sta import sta
 import pythunder
 
 
-def verboseprint(*args, **kwargs):
-    print(*args, **kwargs)
+# def verboseprint(*args, **kwargs):
+#     print(*args, **kwargs)
 
 
-# verboseprint = lambda *a, **k: None
+verboseprint = lambda *a, **k: None
 
 
 class bcolors:
@@ -110,7 +110,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     net_id = break_node_source.net_id
     kernel = break_node_source.kernel
     side = break_node_source.side
-    print("\nBreaking net:", net_id, "Kernel:", kernel)
+    verboseprint("\nBreaking net:", net_id, "Kernel:", kernel)
 
     dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
@@ -160,7 +160,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
         net_id = break_node_source.net_id
         kernel = break_node_source.kernel
         side = break_node_source.side
-        print("\nBreaking net:", net_id, "Kernel:", kernel)
+        verboseprint("\nBreaking net:", net_id, "Kernel:", kernel)
 
         dir_map = {0: "EAST", 1: "SOUTH", 2: "WEST", 3: "NORTH"}
 
@@ -270,7 +270,7 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                                     routing,
                                 )
                             except:
-                                print("Skip")
+                                verboseprint("Skip")
                     else:
                         if idx + 1 >= len(path):
                             break
@@ -289,7 +289,7 @@ def exhaustive_pipe(graph, id_to_name, placement, routing):
                                     routing,
                                 )
                             except:
-                                print("Skip")
+                                verboseprint("Skip")
 
 
 def add_delay_to_kernel(graph, kernel, added_delay, id_to_name, placement, routing):
