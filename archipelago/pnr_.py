@@ -305,6 +305,7 @@ def pnr(
         packed_file = dump_packed_result(
             app_name, cwd, input_netlist, id_to_name, copy_to_dir=copy_to_dir
         )
+        
 
     # tear down
     if use_temp:

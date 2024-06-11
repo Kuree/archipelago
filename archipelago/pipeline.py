@@ -124,7 +124,6 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     new_reg_tile.input_port_latencies["reg"] = 1
     new_reg_tile.input_port_break_path["reg"] = True
 
-    graph.added_regs += 1
 
     graph.edges.remove((break_node_source, break_node_dest))
     graph.add_node(new_reg_route_source)
@@ -139,6 +138,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
     reg_into_route(routes, break_node_source, new_reg_route_source)
     placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
     id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+    graph.added_regs += 1
 
     graph.update_sources_and_sinks()
     graph.update_edge_kernels()
@@ -174,7 +174,6 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
         new_reg_tile.input_port_latencies["reg"] = 1
         new_reg_tile.input_port_break_path["reg"] = True
 
-        graph.added_regs += 1
 
         graph.edges.remove((break_node_source, break_node_dest))
         graph.add_node(new_reg_route_source)
@@ -189,6 +188,7 @@ def break_crit_path(graph, id_to_name, crit_path, placement, routes):
         reg_into_route(routes, break_node_source, new_reg_route_source)
         placement[new_reg_tile.tile_id] = (new_reg_tile.x, new_reg_tile.y)
         id_to_name[new_reg_tile.tile_id] = f"pnr_pipelining{graph.added_regs}"
+        graph.added_regs += 1
 
         graph.update_sources_and_sinks()
         graph.update_edge_kernels()
@@ -1007,6 +1007,10 @@ def pipeline_pnr(
             except:
                 max_itr = itr
             itr += 1
+
+
+        if max_itr > 1:
+            max_itr = 1
 
         print("\nCan break", max_itr, "critical paths")
 

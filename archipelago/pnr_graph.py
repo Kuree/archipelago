@@ -826,6 +826,8 @@ def construct_graph(
         max_reg_id = max(max_reg_id, int(blk_id[1:]))
     graph.added_regs = max_reg_id + 1
 
+    
+
     for net_id, net in routes.items():
         for route in net:
             for seg1, seg2 in zip(route, route[1:]):
