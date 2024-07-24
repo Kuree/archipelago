@@ -233,10 +233,13 @@ def pnr(
             )
 
         else:
-            # Find first value of PNR_PLACER_DENSITY that routes
-            pnr_placer_density = 0
+            # Find first value of PNR_PLACER_ANNEAL that routes
+            # 0 < PNR_PLACER_ANNEAL < 1
+            # If you set this to 1 or higher, placing will never finish
+            # Default is 0.97, higher will give better placement, lower might improve routability
+            pnr_placer_anneal = 0.97
 
-            while pnr_placer_density <= 30:
+            while pnr_placer_anneal >= 0:
                 if os.path.isfile(placement_filename):
                     os.remove(placement_filename)
 
@@ -247,10 +250,10 @@ def pnr(
                 else:
                     has_fixed = False
 
-                os.environ["PNR_PLACER_DENSITY"] = str(pnr_placer_density)
+                os.environ["PNR_PLACER_ANNEAL"] = str(pnr_placer_anneal)
                 print(
-                    "Trying placement with PnR placer density:",
-                    os.environ["PNR_PLACER_DENSITY"],
+                    "Trying placement with PnR placer annealing param:",
+                    os.environ["PNR_PLACER_ANNEAL"],
                 )
                 place(packed_file, layout_filename, placement_filename, has_fixed)
                 if not os.path.isfile(placement_filename):
@@ -269,9 +272,45 @@ def pnr(
                     )
                     break
                 except:
-                    print("Unable to route with PNR_PLACER_DENSITY:", pnr_placer_density)
+                    print("Unable to route with PNR_PLACER_ANNEAL:", pnr_placer_anneal)
 
-                pnr_placer_density += 1
+                pnr_placer_anneal -= 0.1
+
+            # One last try with PNR_PLACER_ANNEAL = 0
+            pnr_placer_anneal = 0
+
+            if os.path.isfile(placement_filename):
+                os.remove(placement_filename)
+
+            if fixed_pos is not None:
+                assert isinstance(fixed_pos, dict)
+                dump_placement_result(fixed_pos, placement_filename, id_to_name)
+                has_fixed = True
+            else:
+                has_fixed = False
+
+            os.environ["PNR_PLACER_ANNEAL"] = str(pnr_placer_anneal)
+            print(
+                "Trying placement with PnR placer density:",
+                os.environ["PNR_PLACER_ANNEAL"],
+            )
+            place(packed_file, layout_filename, placement_filename, has_fixed)
+            if not os.path.isfile(placement_filename):
+                raise PnRException()
+
+            try:
+                route(
+                    packed_file,
+                    placement_filename,
+                    graph_path,
+                    route_filename,
+                    max_frequency,
+                    layout_filename,
+                    wave_info=wave_filename,
+                    shift_registers=shift_registers,
+                )
+            except:
+                print("Unable to route with PNR_PLACER_ANNEAL:", pnr_placer_anneal)
 
     if "PNR_PLACER_EXP" in os.environ and not pnr_placer_exp_set:
         del os.environ["PNR_PLACER_EXP"]
