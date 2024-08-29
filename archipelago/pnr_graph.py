@@ -802,7 +802,6 @@ def construct_graph(
     routes,
     id_to_name,
     netlist,
-    existing_kernel_latencies=None,
     pe_latency=0,
     pond_latency=0,
     io_latency=0,
