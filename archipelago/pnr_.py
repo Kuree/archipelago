@@ -178,7 +178,7 @@ def pnr(
                 if routed:
                     placement_result = pycyclone.io.load_placement(placement_filename)
                     routing_result = load_routing_result(route_filename)
-                    placement_result, routing_result, id_to_name = pipeline_pnr(
+                    placement_result, routing_result, id_to_name, curr_freq = pipeline_pnr(
                         cwd,
                         placement_result,
                         routing_result,
@@ -191,15 +191,17 @@ def pnr(
                         pes_with_packed_ponds,
                         sparse,
                     )
-                    freq = run_sta(
-                        packed_file,
-                        placement_filename,
-                        route_filename,
-                        id_to_name,
-                        sparse,
-                    )
-                    if freq > max_freq:
-                        max_freq = freq
+                    # freq = run_sta(
+                    #     packed_file,
+                    #     placement_filename,
+                    #     route_filename,
+                    #     id_to_name,
+                    #     sparse,
+                    # )
+                    if curr_freq > max_freq:
+                        print("New maximum frequency:", curr_freq, "MHz")
+                        print("New optimal PNR_PLACER_EXP:", pnr_placer_exp, "\n")
+                        max_freq = curr_freq
                         opt_pnr_placer_exp = pnr_placer_exp
 
                 if fixed_pos is not None:
@@ -289,7 +291,7 @@ def pnr(
     routing_result = load_routing_result(route_filename)
 
     if id_to_name is not None:
-        placement_result, routing_result, id_to_name = pipeline_pnr(
+        placement_result, routing_result, id_to_name, freq = pipeline_pnr(
             cwd,
             placement_result,
             routing_result,

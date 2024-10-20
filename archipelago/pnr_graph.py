@@ -474,12 +474,12 @@ class RoutingResultGraph:
                         if isinstance(n, TileNode) and n.tile_type == TileType.MEM:
                             self.removed_edges.append((cycle[idx + 1], n))
                             self.remove_edge((cycle[idx + 1], n))
-                            print("removing edge", str(cycle[idx + 1]), str(n))
+                            # print("removing edge", str(cycle[idx + 1]), str(n))
                             removed = True
                     if not removed:
                         self.removed_edges.append((cycle[1], cycle[0]))
                         self.remove_edge((cycle[1], cycle[0]))
-                        print("removing edge", str(cycle[1]), str(cycle[0]))
+                        # print("removing edge", str(cycle[1]), str(cycle[0]))
                     return True
         return False
 

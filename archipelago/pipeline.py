@@ -923,9 +923,10 @@ def pipeline_pnr(
     sparse,
 ):
     if load_only:
+        freq = None
         packed_file = os.path.join(app_dir, "design.packed")
         id_to_name = pythunder.io.load_id_to_name(packed_file)
-        return placement, routing, id_to_name
+        return placement, routing, id_to_name, freq
 
     placement_save = copy.deepcopy(placement)
     routing_save = copy.deepcopy(routing)
@@ -1082,4 +1083,4 @@ def pipeline_pnr(
     dump_routing_result(app_dir, routing)
     dump_placement_result(app_dir, placement, id_to_name)
 
-    return placement, routing, id_to_name
+    return placement, routing, id_to_name, curr_freq
