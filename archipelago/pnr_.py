@@ -137,6 +137,7 @@ def pnr(
             pnr_placer_exp = 1
             max_freq = 0
             opt_pnr_placer_exp = 1
+            exp_to_freq = {}
 
             while pnr_placer_exp <= 30:
                 os.environ["PNR_PLACER_EXP"] = str(pnr_placer_exp)
@@ -173,6 +174,7 @@ def pnr(
                     routed = True
                 except:
                     print("Unable to route with PNR_PLACER_EXP:", pnr_placer_exp)
+                    exp_to_freq[pnr_placer_exp] = 0
                     routed = False
 
                 if routed:
@@ -198,6 +200,7 @@ def pnr(
                         id_to_name,
                         sparse,
                     )
+                    exp_to_freq[pnr_placer_exp] = freq
                     if freq > max_freq:
                         max_freq = freq
                         opt_pnr_placer_exp = pnr_placer_exp
@@ -231,6 +234,15 @@ def pnr(
                 wave_info=wave_filename,
                 shift_registers=shift_registers,
             )
+
+            # sort the dictionary by frequency
+            exp_to_freq = dict(
+                sorted(exp_to_freq.items(), key=lambda item: item[1], reverse=True)
+            )
+            # dump the result to a file
+            with open(f"/aha/pnr_exp_freq.txt", "w") as f:
+                for exp, freq in exp_to_freq.items():
+                    f.write(str(exp) + ": " + str(freq) + " MHz\n")
 
         else:
             # Find first value of PNR_PLACER_DENSITY that routes

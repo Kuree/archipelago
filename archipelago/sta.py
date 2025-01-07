@@ -388,8 +388,13 @@ def run_sta(packed_file, placement_file, routing_file, id_to_name, sparse):
     else:
         io_cycles = 1
 
+    # Old
+    # routing_result_graph = construct_graph(
+    #     placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
+    # )
+    # Jack's Fix
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
+        placement, routing, id_to_name, netlist, None, pe_latency, 0, io_cycles, sparse
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
@@ -427,8 +432,13 @@ def main():
     else:
         io_cycles = 1
 
+    # Old
+    # routing_result_graph = construct_graph(
+    #     placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
+    # )
+    # Jack's Fix
     routing_result_graph = construct_graph(
-        placement, routing, id_to_name, netlist, pe_latency, 0, io_cycles, sparse
+        placement, routing, id_to_name, netlist, None, pe_latency, 0, io_cycles, sparse
     )
 
     clock_speed, crit_path, crit_nodes = sta(routing_result_graph)
